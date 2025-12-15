@@ -1,0 +1,36 @@
+# -----------------------------
+# Core Backend
+# -----------------------------
+Flask==3.1.2
+Werkzeug==3.1.4
+Jinja2==3.1.6
+itsdangerous==2.2.0
+click==8.3.1
+
+# -----------------------------
+# Computer Vision (Inference)
+# -----------------------------
+opencv-python==4.12.0.88
+numpy==2.2.6
+mediapipe==0.10.14
+protobuf==4.25.8
+absl-py==2.3.1
+
+# -----------------------------
+# ML Model Loading (Inference only)
+# -----------------------------
+scikit-learn==1.8.0
+joblib==1.5.2
+
+# -----------------------------
+# Raspberry Pi Hardware
+# -----------------------------
+RPi.GPIO
+smbus2
+Adafruit-CharLCD
+
+# -----------------------------
+# Utilities
+# -----------------------------
+python-dateutil==2.9.0.post0
+six==1.17.0
