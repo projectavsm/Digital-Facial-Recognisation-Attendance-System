@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+.env
+dataset/
+model.pkl
+train_status.json
+logs/
