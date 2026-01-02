@@ -1,19 +1,14 @@
-# run_pi.py
-"""
-Headless Raspberry Pi Attendance System
----------------------------------------
-- Auto-start Flask API (optional)
-- Continuous camera + recognition loop
-- LCD + buzzer only
-- No frontend required
-"""
-
 import threading
 import time
 import signal
 import sys
+import cv2            # OpenCV for camera handling
+import mediapipe as mp # AI for face detection
+from datetime import datetime
+from sqlalchemy import text
 
-from app import app                   # Your Flask app
+# Import the parts we set up earlier
+from app import app, db
 from hardware import (
     attendance_success,
     attendance_duplicate,
@@ -21,69 +16,123 @@ from hardware import (
     system_message,
     cleanup
 )
-from model import recognize_face      # Your face recognition logic
+from model import load_model_if_exists, predict_with_model, crop_face_and_embed
 
+# Global flag to keep the system running
 running = True
 
 # ---------------------------------------------------------
-# CAMERA LOOP
+# CAMERA & RECOGNITION LOOP
 # ---------------------------------------------------------
 def camera_loop():
     """
-    Continuous camera + recognition loop
+    Main background thread:
+    1. Captures frames from the camera
+    2. Detects faces using MediaPipe
+    3. Crops and converts faces to embeddings
+    4. Predicts user ID and marks attendance in MySQL
     """
     system_message("System Ready", "Scanning faces")
+    
+    # Initialize the camera (Index 0 is standard Pi Camera)
+    cap = cv2.VideoCapture(0)
+    
+    # Initialize MediaPipe Face Detection
+    mp_face = mp.solutions.face_detection.FaceDetection(
+        model_selection=0, # 0 for short-range (2 meters), 1 for long-range
+        min_detection_confidence=0.6 # Only process clear faces
+    )
+    
+    # Load the Random Forest model we fixed earlier
+    clf = load_model_if_exists()
+    if clf is None:
+        print("[WARNING] model.pkl not found. System will only scan, not recognize.")
+        system_message("Model Missing", "Train via Web")
+
+    print("[CAMERA] Loop started...")
 
     while running:
-        try:
-            result = recognize_face()  # returns (name, status) or None
-            if result is None:
-                time.sleep(0.5)
-                continue
+        success, frame = cap.read()
+        if not success:
+            time.sleep(0.1)
+            continue
 
-            name, status = result
+        # MediaPipe requires RGB images, OpenCV captures in BGR
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = mp_face.process(rgb_frame)
 
-            if status == "duplicate":
-                attendance_duplicate(name)
+        # If faces are detected in the frame
+        if results.detections:
+            for detection in results.detections:
+                # 1. Convert the face into a mathematical vector (embedding)
+                emb = crop_face_and_embed(frame, detection)
+                
+                if emb is not None and clf is not None:
+                    # 2. Ask the AI model who this is
+                    user_id, confidence = predict_with_model(clf, emb)
+                    
+                    # 3. If confidence is high enough, talk to the Database
+                    if confidence > 0.5:
+                        with app.app_context():
+                            today = datetime.now().date()
+                            
+                            # Check if already marked today in MySQL
+                            exists = db.session.execute(
+                                text("SELECT 1 FROM attendance WHERE student_id = :sid AND DATE(timestamp) = :today"),
+                                {"sid": user_id, "today": today}
+                            ).fetchone()
 
-            elif status == "marked":
-                attendance_success(name)
+                            # Fetch the name for the LCD display
+                            name = db.session.execute(
+                                text("SELECT name FROM users WHERE user_id = :sid"),
+                                {"sid": user_id}
+                            ).scalar() or user_id
 
-            elif status == "unknown":
-                attendance_unknown()
+                            if not exists:
+                                # Mark new attendance
+                                db.session.execute(
+                                    text("INSERT INTO attendance (student_id, class_id, timestamp, status) VALUES (:sid, 1, NOW(), 'present')"),
+                                    {"sid": user_id}
+                                )
+                                db.session.commit()
+                                attendance_success(name, confidence)
+                            else:
+                                attendance_duplicate(name)
+                    else:
+                        # Face detected but AI isn't sure who it is
+                        attendance_unknown()
+                
+                # Sleep for 2 seconds after a detection to prevent double-marking the same person
+                time.sleep(2)
 
-            time.sleep(2)  # short pause to prevent spamming
-
-        except Exception as e:
-            system_message("Camera Error", "")
-            print("[ERROR]", e)
-            time.sleep(2)
+    # Release hardware when the thread stops
+    cap.release()
 
 # ---------------------------------------------------------
-# SHUTDOWN HANDLER
+# SHUTDOWN CLEANUP
 # ---------------------------------------------------------
 def shutdown_handler(signum, frame):
+    """Safely closes GPIO and Camera when you press Ctrl+C"""
     global running
+    print("\n[SHUTDOWN] Closing system...")
     running = False
-    cleanup()
+    cleanup() # From hardware.py
     sys.exit(0)
 
+# Listen for termination signals (Ctrl+C)
 signal.signal(signal.SIGTERM, shutdown_handler)
 signal.signal(signal.SIGINT, shutdown_handler)
 
 # ---------------------------------------------------------
-# MAIN
+# STARTUP
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    print("[PI] Starting headless attendance system...")
+    print("[PI] Digital Attendance System Initializing...")
+    
+    # Start the camera recognition in a background thread
+    camera_thread = threading.Thread(target=camera_loop, daemon=True)
+    camera_thread.start()
 
-    # Start camera loop in background
-    threading.Thread(target=camera_loop, daemon=True).start()
-
-    # Start Flask API for optional access
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-        use_reloader=False
-    )
+    # Start the Flask Web Dashboard on the main thread
+    # Access this via http://<your-pi-ip>:5000
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
