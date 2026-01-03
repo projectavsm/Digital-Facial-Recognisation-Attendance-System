@@ -1,138 +1,226 @@
-import threading
-import time
-import signal
-import sys
-import cv2            # OpenCV for camera handling
-import mediapipe as mp # AI for face detection
+# =========================================================
+# run_pi.py
+# Digital Attendance System – Raspberry Pi Camera Version
+# Uses Picamera2 (libcamera) instead of OpenCV VideoCapture
+# =========================================================
+
+# ------------------------------
+# Standard Python libraries
+# ------------------------------
+import threading           # Run camera loop in background
+import time                # Delay handling
+import signal              # Capture Ctrl+C / shutdown signals
+import sys                 # System exit handling
 from datetime import datetime
+
+# ------------------------------
+# Computer Vision & AI libraries
+# ------------------------------
+import cv2                 # OpenCV (for image processing, NOT camera)
+import mediapipe as mp     # Face detection AI
+import numpy as np         # Numerical operations (required by Picamera2)
+
+# ------------------------------
+# Raspberry Pi Camera (libcamera)
+# ------------------------------
+from picamera2 import Picamera2
+
+# ------------------------------
+# Database & Flask
+# ------------------------------
 from sqlalchemy import text
-
-# Import the parts we set up earlier
 from app import app, db
+
+# ------------------------------
+# Hardware & UI helpers
+# ------------------------------
 from hardware import (
-    attendance_success,
-    attendance_duplicate,
-    attendance_unknown,
-    system_message,
-    cleanup
+    attendance_success,     # LCD + buzzer success
+    attendance_duplicate,   # Already marked today
+    attendance_unknown,     # Unknown face
+    system_message,         # LCD system message
+    cleanup                 # GPIO cleanup
 )
-from model import load_model_if_exists, predict_with_model, crop_face_and_embed
 
-# Global flag to keep the system running
-running = True
+# ------------------------------
+# AI Model helpers
+# ------------------------------
+from model import (
+    load_model_if_exists,   # Loads trained face model
+    predict_with_model,     # Predicts identity
+    crop_face_and_embed     # Converts face → embedding
+)
 
-# ---------------------------------------------------------
-# CAMERA & RECOGNITION LOOP
-# ---------------------------------------------------------
+# =========================================================
+# GLOBAL CONTROL FLAG
+# =========================================================
+running = True   # Used to safely stop camera thread
+
+# =========================================================
+# CAMERA & FACE RECOGNITION LOOP (Pi Camera Version)
+# =========================================================
 def camera_loop():
     """
-    Main background thread:
-    1. Captures frames from the camera
+    Background thread that:
+    1. Captures frames from Raspberry Pi Camera using libcamera
     2. Detects faces using MediaPipe
-    3. Crops and converts faces to embeddings
-    4. Predicts user ID and marks attendance in MySQL
+    3. Converts faces to embeddings
+    4. Recognizes users and marks attendance in database
     """
+
+    # Show startup message on LCD
     system_message("System Ready", "Scanning faces")
-    
-    # Initialize the camera (Index 0 is standard Pi Camera)
-    cap = cv2.VideoCapture(0)
-    
-    # Initialize MediaPipe Face Detection
-    mp_face = mp.solutions.face_detection.FaceDetection(
-        model_selection=0, # 0 for short-range (2 meters), 1 for long-range
-        min_detection_confidence=0.6 # Only process clear faces
+
+    # -----------------------------------------------------
+    # Initialize Raspberry Pi Camera (Picamera2)
+    # -----------------------------------------------------
+    picam2 = Picamera2()
+
+    # Camera configuration:
+    # - RGB888 format (MediaPipe expects RGB)
+    # - 640x480 resolution (fast + accurate)
+    config = picam2.create_preview_configuration(
+        main={"format": "RGB888", "size": (640, 480)}
     )
-    
-    # Load the Random Forest model we fixed earlier
+
+    picam2.configure(config)
+    picam2.start()  # Start camera stream
+
+    print("[CAMERA] Pi Camera started via libcamera")
+
+    # -----------------------------------------------------
+    # Initialize MediaPipe Face Detection
+    # -----------------------------------------------------
+    mp_face = mp.solutions.face_detection.FaceDetection(
+        model_selection=0,          # 0 = short-range (best for classrooms)
+        min_detection_confidence=0.6
+    )
+
+    # -----------------------------------------------------
+    # Load trained AI model (if exists)
+    # -----------------------------------------------------
     clf = load_model_if_exists()
     if clf is None:
-        print("[WARNING] model.pkl not found. System will only scan, not recognize.")
         system_message("Model Missing", "Train via Web")
+        print("[WARNING] No trained model found")
 
-    print("[CAMERA] Loop started...")
-
+    # -----------------------------------------------------
+    # Main camera processing loop
+    # -----------------------------------------------------
     while running:
-        success, frame = cap.read()
-        if not success:
-            time.sleep(0.1)
-            continue
 
-        # MediaPipe requires RGB images, OpenCV captures in BGR
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = mp_face.process(rgb_frame)
+        # Capture a frame from Pi Camera (already RGB)
+        frame = picam2.capture_array()
 
-        # If faces are detected in the frame
+        # MediaPipe expects RGB → frame already RGB
+        results = mp_face.process(frame)
+
+        # -------------------------------------------------
+        # If at least one face is detected
+        # -------------------------------------------------
         if results.detections:
             for detection in results.detections:
-                # 1. Convert the face into a mathematical vector (embedding)
-                emb = crop_face_and_embed(frame, detection)
-                
+
+                # Convert RGB → BGR before OpenCV processing
+                bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+                # Extract face and generate embedding
+                emb = crop_face_and_embed(bgr_frame, detection)
+
+                # If embedding + model exist
                 if emb is not None and clf is not None:
-                    # 2. Ask the AI model who this is
+
+                    # Predict identity using trained model
                     user_id, confidence = predict_with_model(clf, emb)
-                    
-                    # 3. If confidence is high enough, talk to the Database
+
+                    # -------------------------------------
+                    # If confidence is acceptable
+                    # -------------------------------------
                     if confidence > 0.5:
                         with app.app_context():
                             today = datetime.now().date()
-                            
-                            # Check if already marked today in MySQL
+
+                            # Check if already marked today
                             exists = db.session.execute(
-                                text("SELECT 1 FROM attendance WHERE student_id = :sid AND DATE(timestamp) = :today"),
+                                text("""
+                                    SELECT 1 FROM attendance
+                                    WHERE student_id = :sid
+                                    AND DATE(timestamp) = :today
+                                """),
                                 {"sid": user_id, "today": today}
                             ).fetchone()
 
-                            # Fetch the name for the LCD display
+                            # Get user name for display
                             name = db.session.execute(
                                 text("SELECT name FROM users WHERE user_id = :sid"),
                                 {"sid": user_id}
                             ).scalar() or user_id
 
+                            # ---------------------------------
+                            # New attendance
+                            # ---------------------------------
                             if not exists:
-                                # Mark new attendance
                                 db.session.execute(
-                                    text("INSERT INTO attendance (student_id, class_id, timestamp, status) VALUES (:sid, 1, NOW(), 'present')"),
+                                    text("""
+                                        INSERT INTO attendance
+                                        (student_id, class_id, timestamp, status)
+                                        VALUES (:sid, 1, NOW(), 'present')
+                                    """),
                                     {"sid": user_id}
                                 )
                                 db.session.commit()
                                 attendance_success(name, confidence)
                             else:
                                 attendance_duplicate(name)
+
                     else:
-                        # Face detected but AI isn't sure who it is
+                        # Face detected but confidence too low
                         attendance_unknown()
-                
-                # Sleep for 2 seconds after a detection to prevent double-marking the same person
+
+                # Delay to prevent double marking same person
                 time.sleep(2)
 
-    # Release hardware when the thread stops
-    cap.release()
+    # -----------------------------------------------------
+    # Stop camera when loop exits
+    # -----------------------------------------------------
+    picam2.stop()
+    print("[CAMERA] Pi Camera stopped")
 
-# ---------------------------------------------------------
-# SHUTDOWN CLEANUP
-# ---------------------------------------------------------
+# =========================================================
+# SAFE SHUTDOWN HANDLER
+# =========================================================
 def shutdown_handler(signum, frame):
-    """Safely closes GPIO and Camera when you press Ctrl+C"""
+    """
+    Ensures clean exit when Ctrl+C is pressed
+    """
     global running
     print("\n[SHUTDOWN] Closing system...")
     running = False
-    cleanup() # From hardware.py
+    cleanup()      # Turn off GPIO safely
     sys.exit(0)
 
-# Listen for termination signals (Ctrl+C)
+# Capture Ctrl+C and termination signals
 signal.signal(signal.SIGTERM, shutdown_handler)
 signal.signal(signal.SIGINT, shutdown_handler)
 
-# ---------------------------------------------------------
-# STARTUP
-# ---------------------------------------------------------
+# =========================================================
+# APPLICATION ENTRY POINT
+# =========================================================
 if __name__ == "__main__":
     print("[PI] Digital Attendance System Initializing...")
-    
-    # Start the camera recognition in a background thread
-    camera_thread = threading.Thread(target=camera_loop, daemon=True)
+
+    # Start camera loop in background thread
+    camera_thread = threading.Thread(
+        target=camera_loop,
+        daemon=True
+    )
     camera_thread.start()
 
-    # Start the Flask Web Dashboard on the main thread
-    # Access this via http://<your-pi-ip>:5000
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    # Start Flask web dashboard
+    # Access via: http://<pi-ip>:5000
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=False,
+        use_reloader=False
+    )
