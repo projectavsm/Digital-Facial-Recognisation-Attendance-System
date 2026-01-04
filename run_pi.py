@@ -1,7 +1,7 @@
 # =========================================================
 # run_pi.py
 # Digital Attendance System – Pi 5 High-Stability Version
-# Uses persistent rpicam-vid stream to prevent hardware hangs
+# Integrated with Admin Dashboard for Dataset Viewing
 # =========================================================
 
 import threading
@@ -12,14 +12,15 @@ import subprocess
 import os
 from datetime import datetime
 
+# Flask and Web helpers
+from flask import render_template, request, redirect, url_for, Response
+from sqlalchemy import text
+from app import app, db
+
 # Computer Vision & AI libraries
 import cv2
 import mediapipe as mp
 import numpy as np
-
-# Database & Flask
-from sqlalchemy import text
-from app import app, db
 
 # Hardware helpers
 from hardware import (
@@ -40,46 +41,78 @@ from model import (
 running = True
 
 # =========================================================
+# NEW: ADMIN & DASHBOARD ROUTES
+# =========================================================
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Simple login gate for the admin panel"""
+    if request.method == 'POST':
+        # Change 'admin123' to your preferred password
+        if request.form.get('password') == 'admin123':
+            # Redirecting specifically to your folder for now
+            return redirect(url_for('admin_view', student_name='Abhisam_Sharma'))
+        else:
+            return "Invalid Password. <a href='/admin/login'>Try again</a>"
+    
+    return '''
+        <div style="text-align:center; margin-top:100px; font-family:sans-serif;">
+            <h2>Admin Dataset Access</h2>
+            <form method="post">
+                <input type="password" name="password" placeholder="Password" style="padding:10px;">
+                <button type="submit" style="padding:10px;">Login</button>
+            </form>
+        </div>
+    '''
+
+@app.route('/admin/view/<student_name>')
+def admin_view(student_name):
+    """Scans the dataset folder and renders the images in a grid"""
+    dataset_path = os.path.join('dataset', student_name)
+    
+    if not os.path.exists(dataset_path):
+        return f"Folder for {student_name} not found in dataset/", 404
+
+    # Get list of all .jpg files in the student's folder
+    images = [f for f in os.listdir(dataset_path) if f.endswith('.jpg')]
+    
+    # Ensure the symlink exists so Flask can serve these external images
+    # We use 'dataset_link' as created in our previous terminal step
+    link_path = os.path.join('static', 'dataset_link')
+    if not os.path.exists(link_path):
+        try:
+            os.symlink(os.path.abspath('dataset'), link_path)
+            print("[SYSTEM] Created missing symlink for dataset.")
+        except Exception as e:
+            print(f"[ERROR] Could not create symlink: {e}")
+
+    return render_template('admin_view.html', student_name=student_name, images=images)
+
+# =========================================================
 # PI 5 PERSISTENT CAPTURE LOGIC
 # =========================================================
+
 def get_single_frame():
-    """
-    Grabs a single frame using rpicam-vid. 
-    By using --frames 1, we get the current state of the sensor 
-    without the 'startup delay' of rpicam-still.
-    """
-    # -t 200: Wait 200ms to ensure the auto-exposure has a lock
-    # --codec yuv420: Fastest raw format for the Pi 5 to output
+    """Grabs a single YUV frame via rpicam-vid for maximum stability on Pi 5"""
     cmd = [
-        "rpicam-vid",
-        "--noproview",
-        "--camera", "0",
-        "--width", "640",
-        "--height", "480",
-        "--frames", "1",
-        "--timeout", "200",
-        "--codec", "yuv420",
-        "-o", "-"
+        "rpicam-vid", "--noproview", "--camera", "0",
+        "--width", "640", "--height", "480",
+        "--frames", "1", "--timeout", "200",
+        "--codec", "yuv420", "-o", "-"
     ]
     try:
-        # Run the command and capture the raw YUV byte stream
         process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=3)
-        
         if not process.stdout or len(process.stdout) == 0:
             return None
 
-        # YUV420 data size for 640x480 is Width * Height * 1.5
         expected_size = int(640 * 480 * 1.5)
         raw_data = process.stdout[:expected_size]
         
         if len(raw_data) < expected_size:
             return None
 
-        # Convert the raw YUV bytes into a BGR image that OpenCV can use
-        # This is much faster and more reliable than decoding a JPEG/BMP
         yuv_array = np.frombuffer(raw_data, dtype=np.uint8).reshape((int(480 * 1.5), 640))
         bgr_frame = cv2.cvtColor(yuv_array, cv2.COLOR_YUV2BGR_I420)
-        
         return bgr_frame
     except Exception as e:
         print(f"[CAMERA ERROR] Stream failed: {e}")
@@ -88,38 +121,31 @@ def get_single_frame():
 # =========================================================
 # MAIN RECOGNITION LOOP
 # =========================================================
+
 def camera_loop():
     system_message("System Ready", "Scanning faces")
     print("[PI 5] Camera System Online (High-Stability Mode)")
 
-    # Initialize MediaPipe
     mp_face = mp.solutions.face_detection.FaceDetection(
-        model_selection=0,
-        min_detection_confidence=0.6
+        model_selection=0, min_detection_confidence=0.6
     )
 
     clf = load_model_if_exists()
     if clf is None:
-        print("[WARNING] No trained model found. Please train via Web Dashboard.")
+        print("[WARNING] No trained model found. Use the Admin Panel to check dataset.")
 
     while running:
-        # 1. Capture Frame
         frame = get_single_frame()
-
         if frame is None:
-            print("[CAMERA] Stdout empty. Resetting camera service...")
-            # If hardware hangs, kill any stuck processes
             subprocess.run(["sudo", "pkill", "-9", "rpicam-vid"], stderr=subprocess.DEVNULL)
             time.sleep(1)
             continue
 
-        # 2. Process Face Detection
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = mp_face.process(rgb_frame)
 
         if results.detections:
             for detection in results.detections:
-                # 3. AI Recognition
                 emb = crop_face_and_embed(frame, detection)
 
                 if emb is not None and clf is not None:
@@ -128,8 +154,6 @@ def camera_loop():
                     if confidence > 0.5:
                         with app.app_context():
                             today = datetime.now().date()
-                            
-                            # Database Check
                             try:
                                 exists = db.session.execute(
                                     text("SELECT 1 FROM attendance WHERE student_id = :sid AND DATE(timestamp) = :today"),
@@ -152,16 +176,15 @@ def camera_loop():
                                     attendance_duplicate(name)
                             except Exception as db_err:
                                 print(f"[DB ERROR] {db_err}")
-
                     else:
                         attendance_unknown()
 
-                # Cooldown to avoid double-triggers
-                time.sleep(2)
+                time.sleep(2) # Cooldown
 
 # =========================================================
 # SHUTDOWN & STARTUP
 # =========================================================
+
 def shutdown_handler(signum, frame):
     global running
     print("\n[SHUTDOWN] Closing system...")
@@ -173,7 +196,7 @@ signal.signal(signal.SIGTERM, shutdown_handler)
 signal.signal(signal.SIGINT, shutdown_handler)
 
 if __name__ == "__main__":
-    # Preliminary hardware reset to ensure the camera is free
+    # Clean up any stuck processes before starting
     subprocess.run(["sudo", "pkill", "-9", "rpicam-still"], stderr=subprocess.DEVNULL)
     subprocess.run(["sudo", "pkill", "-9", "rpicam-vid"], stderr=subprocess.DEVNULL)
     
@@ -181,4 +204,5 @@ if __name__ == "__main__":
     camera_thread = threading.Thread(target=camera_loop, daemon=True)
     camera_thread.start()
 
+    # host="0.0.0.0" allows access from your laptop browser
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
