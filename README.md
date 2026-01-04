@@ -1,125 +1,105 @@
-# Digital Facial Recognition Attendance System
+# 🛡️ Digital Facial Recognition Attendance System (Pi 5 Edition)
 
-The **Digital Facial Recognition Attendance System** is an advanced, automated system designed to track and manage attendance efficiently using facial recognition technology. Unlike traditional methods such as manual registers or RFID cards, this system leverages computer vision and AI to identify individuals in real-time, ensuring accuracy, security, and time-saving management.
+An automated attendance management system leveraging Raspberry Pi 5, MediaPipe, and Flask. This system identifies individuals in real-time, logs attendance to a MySQL database with hardware-level duplicate prevention, and provides a password-protected admin suite for dataset management.
 
----
+## 🚀 System Architecture
+
+The system operates in three distinct layers:
+
+- **Hardware Layer:** Raspberry Pi 5 + Pi Camera Module (using persistent YUV streaming via rpicam-vid to bypass Libcamera locks)
+- **Logic Layer:**
+    - Detection: Google MediaPipe Face Detection (Modern AI) or OpenCV Haar Cascades (Legacy/Manual)
+    - Recognition: FaceNet-inspired Grayscale Embeddings + Scikit-Learn Random Forest Classifier
+    - Training: Automated via Web UI or manual override via force_train.py
+- **Presentation Layer:** Flask Web Dashboard featuring a Glassmorphism UI and Admin Dataset Viewer
 
 ## ✨ Key Features
 
-- **Facial Recognition**: Detects and recognizes faces in real-time using AI and deep learning. Each person is uniquely identified to prevent proxy attendance.
-- **Automated Attendance Logging**: Marks attendance automatically, eliminating manual entry errors.
-- **Database Integration**: Stores records securely in SQLite/MySQL for easy retrieval, analysis, and reporting.
-- **User Management**: Admins can add, update, or remove users and manage facial data.
-- **Reporting & Analytics**: Generates daily, weekly, or monthly attendance reports with visual graphs.
-- **Security & Accuracy**: Works in varied lighting and recognizes faces with masks or glasses.
-- **GUI Dashboard**: Interactive web dashboard for admins and teachers to manage attendance.
-- **Optional Notifications**: Can send email or SMS alerts about attendance status.
+- **High-Stability Capture:** Uses rpicam-vid raw byte-streaming to prevent camera hang issues on Pi 5
+- **Dynamic Admin Panel:** Automatically scans the dataset/ directory with high-resolution face crop viewing
+- **Glassmorphism UI:** Modernized translucent dashboard with real-time system status indicators
+- **Database-Level Duplicate Prevention:** MySQL UNIQUE index ensures one "Present" mark per student per day
+- **Dual Training Support:**
+    - `model.py`: High-accuracy MediaPipe training via Dashboard
+    - `force_train.py`: Robust manual training using Haar Cascades
 
----
+## 🔍 Stability Fixes & Lessons Learned
 
-## 📍 Applications
+### ✅ What Worked
+- **YUV Streaming:** Reduced capture latency from 2.5s to 0.2s
+- **Static Symlinking:** Efficient Flask image serving without data duplication
+- **Subprocess Cleanup:** Prevents zombie camera processes on startup
 
-- Schools, colleges, and universities
-- Corporate offices for employee attendance tracking
-- Workshops, seminars, and training programs
-
----
-
-## 🛠️ Technology Stack
-
-- **Programming Language**: Python
-- **Libraries/Frameworks**: OpenCV, Mediapipe, scikit-learn, Flask, face recognition libraries
-- **Database**: SQLite3 or MySQL
-- **GUI**: HTML, CSS, JavaScript, Web-based dashboard
-- **Optional**: Email/SMS APIs
-
----
-
-## 💡 Benefits
-
-- Reduces manual effort and paperwork
-- Ensures accuracy and prevents fraudulent attendance
-- Provides real-time data and analytics
-- Scalable for institutions of any size
-
----
+### ❌ Challenges Overcome
+- **V4L2 Interface:** Raw subprocess streaming is required for Pi 5 stability
+- **Thermal Management:** Active cooling fan needed to prevent throttling during AI inference
 
 ## 📦 Installation & Setup
 
-1. **Clone the repository:**
-    ```bash
-    git clone https://github.com/yourusername/Digital-Facial-Recognisation-Attendance-System.git
-    cd Digital-Facial-Recognisation-Attendance-System
-    ```
+### 1. Environment Setup
 
-2. **Create a virtual environment and activate it:**
-    ```bash
-    python -m venv venv
-    # Windows
-    venv\Scripts\activate
-    # Linux/Mac
-    source venv/bin/activate
-    ```
+```bash
+git clone https://github.com/your-username/Digital-Attendance-System.git
+cd Digital-Attendance-System
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements-pi.txt
+```
 
-3. **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+### 2. Static Bridge Setup
 
-4. **Run the application:**
-    ```bash
-    python app.py
-    ```
+```bash
+ln -s /home/pi/Digital-Attendance-System/dataset /home/pi/Digital-Attendance-System/static/dataset_link
+```
 
-5. **Open your browser:**
-    ```
-    http://127.0.0.1:5000
-    ```
+### 3. Database Initialization
 
----
+```bash
+mysql -u your_user -p attendance_db < schema.sql
+```
+
+## ⚙️ Running the System
+
+### Manual AI Training
+
+```bash
+python force_train.py
+```
+
+### Start Live System
+
+```bash
+python run_pi.py
+```
+
+### Access the System
+
+- **Dashboard:** `http://<your-pi-ip>:5000`
+- **Admin Panel:** `http://<your-pi-ip>:5000/admin/login` (Password: admin123)
 
 ## 🗂️ Project Structure
 
 ```
-Digital-Facial-Recognisation-Attendance-System/
-├─ app.py                  # Main Flask application
-├─ requirements.txt        # Project dependencies
-├─ .gitignore              # Git ignore rules
-├─ static/                 # CSS, JS, images
-├─ templates/              # HTML templates
-├─ models/                 # Trained ML models
-├─ data/                   # Captured images or datasets
-└─ README.md
+├── run_pi.py         # Main execution loop
+├── force_train.py    # Manual training
+├── model.py          # AI inference & training
+├── app.py            # Flask & SQLAlchemy
+├── hardware.py       # GPIO controls
+├── dataset/          # Face images
+├── models/           # model.pkl
+├── templates/
+│   ├── index.html    # Dashboard
+│   └── admin_view.html
+└── static/
+        └── dataset_link  # Symbolic link
 ```
 
----
+## 📄 Maintenance
 
-## ⚙️ Usage
+- **Laptop:** `git add .` → `git commit` → `git push origin main`
+- **Pi:** `git pull origin main`
 
-1. Admin/Teacher logs in to the dashboard.
-2. Upload images or use a camera feed for real-time recognition.
-3. Attendance is automatically marked in the database.
-4. LCD and buzzer simulation messages are printed to the terminal.
-5. View reports and statistics from the dashboard.
+> **Note:** Optimized for BCM2712 (Pi 5). Running on standard laptop will fail.
 
----
-
-## 🔒 Security & Accuracy
-
-- Prevents duplicate attendance for the same day
-- Uses AI-powered face embeddings for accurate recognition
-- Works with masks and varied lighting conditions
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
-
----
-
-## 🙌 Acknowledgments
-
-- OpenCV, Mediapipe, and scikit-learn communities
-- Flask framework for web dashboard support
-- Face recognition algorithms and online tutorials
+**Author:** Abhisam Sharma  
+**License:** MIT
