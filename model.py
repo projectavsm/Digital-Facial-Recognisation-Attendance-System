@@ -105,7 +105,7 @@ def train_model_background(dataset_dir, progress_callback=None):
     """
     import mediapipe as mp
     mp_face = mp.solutions.face_detection.FaceDetection(
-        model_selection=1, min_detection_confidence=0.5
+        model_selection=0, min_detection_confidence=0.3
     )
 
     X = []  # embeddings

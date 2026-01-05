@@ -155,7 +155,7 @@ def camera_loop():
     print("[START] Recognition thread active.")
 
     mp_face = mp.solutions.face_detection.FaceDetection(
-        model_selection=0, min_detection_confidence=0.6
+        model_selection=0, min_detection_confidence=0.4
     )
 
     clf = load_model_if_exists()
@@ -179,9 +179,10 @@ def camera_loop():
 
                 if emb is not None and clf is not None:
                     user_id, confidence = predict_with_model(clf, emb)
+                    print(f"[DEBUG] Detected: {user_id} | Confidence: {confidence:.2f}")
 
                     # Confidence Threshold: 0.5 (Adjust based on lighting)
-                    if confidence > 0.5:
+                    if confidence > 0.35:
                         with app.app_context():
                             today = datetime.now().date()
                             try:
