@@ -1,34 +1,314 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Mark Attendance</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Mark Attendance | Pi Face AI</title>
+  
+  <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  
+  <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  
+  <style>
+    /* =====================================================
+       VIDEO FEED CONTAINER STYLING
+       ===================================================== */
+    
+    /* Wrapper for video and overlay positioning */
+    .video-wrapper {
+      position: relative;
+      display: inline-block;
+      background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 3px solid #dee2e6;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      transition: all 0.3s ease;
+    }
+    
+    .video-wrapper:hover {
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+      transform: translateY(-2px);
+    }
+    
+    /* Pi camera feed display */
+    #markVideo {
+      display: none; /* Hidden until stream starts */
+      width: 100%;
+      max-width: 640px;
+      height: auto;
+      min-height: 480px;
+      object-fit: cover;
+    }
+    
+    /* Placeholder when camera is idle */
+    .video-placeholder {
+      width: 640px;
+      height: 480px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      color: #6c757d;
+    }
+    
+    .video-placeholder i {
+      font-size: 5rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+    
+    /* =====================================================
+       COUNTDOWN OVERLAY STYLING
+       ===================================================== */
+    
+    #countdownOverlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 12rem;
+      font-weight: 900;
+      color: rgba(255, 71, 87, 0.85);
+      z-index: 100;
+      display: none; /* Hidden by default */
+      pointer-events: none; /* Prevents blocking clicks */
+      text-shadow: 
+        0 0 20px rgba(255, 71, 87, 0.8),
+        4px 4px 15px rgba(0, 0, 0, 0.6);
+      animation: pulse-glow 1s ease-in-out infinite;
+    }
+    
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.05); }
+    }
+    
+    /* =====================================================
+       STATUS MESSAGE STYLING
+       ===================================================== */
+    
+    #markStatus {
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      border-radius: 8px;
+      background-color: #f8f9fa;
+      border: 2px solid #dee2e6;
+      transition: all 0.3s ease;
+    }
+    
+    /* =====================================================
+       RECOGNIZED LIST STYLING
+       ===================================================== */
+    
+    #recognizedList {
+      max-height: 500px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #6c757d #f8f9fa;
+    }
+    
+    #recognizedList::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    #recognizedList::-webkit-scrollbar-track {
+      background: #f8f9fa;
+    }
+    
+    #recognizedList::-webkit-scrollbar-thumb {
+      background: #6c757d;
+      border-radius: 4px;
+    }
+    
+    /* Empty state for recognized list */
+    .list-empty-state {
+      padding: 3rem 1rem;
+      text-align: center;
+      color: #6c757d;
+    }
+    
+    .list-empty-state i {
+      font-size: 3rem;
+      opacity: 0.3;
+      margin-bottom: 1rem;
+    }
+    
+    /* =====================================================
+       BUTTON STYLING
+       ===================================================== */
+    
+    .btn-group .btn {
+      min-width: 120px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-group .btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* =====================================================
+       RESPONSIVE DESIGN
+       ===================================================== */
+    
+    @media (max-width: 768px) {
+      #countdownOverlay {
+        font-size: 8rem;
+      }
+      
+      .video-placeholder {
+        width: 100%;
+        height: 360px;
+      }
+      
+      #markVideo {
+        min-height: 360px;
+      }
+    }
+  </style>
 </head>
-<body>
-<div class="container my-4">
-  <div class="card p-4 shadow-sm">
-    <div class="d-flex justify-content-between align-items-center">
-      <h4>Mark Attendance (Live)</h4>
-      <div>
-        <button id="startMarkBtn" class="btn btn-primary">Start</button>
-        <button id="stopMarkBtn" class="btn btn-danger" disabled>Stop</button>
-      </div>
-    </div>
 
-    <div class="row mt-3">
-      <div class="col-md-7 text-center">
-        <video id="markVideo" width="560" height="420" autoplay muted style="border-radius:10px;border:2px solid #e2e8f0;"></video>
-        <div id="markStatus" class="mt-2 small text-muted">Waiting...</div>
+<body class="bg-light">
+
+<div class="container my-5">
+  <div class="card p-4 border-0 shadow-lg">
+    
+    <!-- =====================================================
+         PAGE HEADER WITH CONTROLS
+         ===================================================== -->
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+      <div>
+        <h2 class="text-primary mb-0">
+          <i class="bi bi-camera-video-fill me-2"></i>
+          Attendance Station
+        </h2>
+        <p class="text-muted small mb-0">
+          <i class="bi bi-cpu-fill me-1"></i>
+          Powered by Raspberry Pi 5 & MediaPipe AI
+        </p>
       </div>
-      <div class="col-md-5">
-        <h6>Recognized (session)</h6>
-        <ul id="recognizedList" class="list-group"></ul>
+      
+      <!-- Control Buttons -->
+      <div class="btn-group" role="group">
+        <button id="startMarkBtn" class="btn btn-lg btn-success px-4">
+          <i class="bi bi-play-circle-fill me-2"></i>
+          Start Scan
+        </button>
+        <button id="stopMarkBtn" class="btn btn-lg btn-outline-danger px-4" disabled>
+          <i class="bi bi-stop-circle-fill me-2"></i>
+          Stop
+        </button>
       </div>
     </div>
+    
+    <!-- =====================================================
+         MAIN CONTENT: VIDEO FEED & RECOGNIZED LIST
+         ===================================================== -->
+    <div class="row">
+      
+      <!-- Left Column: Camera Feed -->
+      <div class="col-lg-7 text-center">
+        <div class="video-wrapper">
+          <!-- Placeholder shown when camera is idle -->
+          <div class="video-placeholder" id="videoPlaceholder">
+            <i class="bi bi-camera-video"></i>
+            <p class="fw-bold">Camera Feed Waiting...</p>
+            <small class="text-muted">Click "Start Scan" to begin</small>
+          </div>
+          
+          <!-- Pi camera MJPEG stream (hidden initially) -->
+          <img id="markVideo" src="" alt="Pi Camera Feed">
+          
+          <!-- Countdown overlay (appears during alignment phase) -->
+          <div id="countdownOverlay">10</div>
+        </div>
+        
+        <!-- Status Display -->
+        <div id="markStatus" class="mt-3 fs-5 fw-bold text-secondary">
+          <i class="bi bi-info-circle-fill me-2"></i>
+          System Idle: Click Start to Begin
+        </div>
+      </div>
+      
+      <!-- Right Column: Recognized Students List -->
+      <div class="col-lg-5">
+        <div class="card bg-white border-0 shadow-sm">
+          
+          <!-- List Header -->
+          <div class="card-header bg-primary text-white fw-bold">
+            <i class="bi bi-people-fill me-2"></i>
+            Recognized This Session
+          </div>
+          
+          <!-- Scrollable List -->
+          <ul id="recognizedList" class="list-group list-group-flush">
+            <!-- Empty state message -->
+            <li class="list-group-item">
+              <div class="list-empty-state">
+                <i class="bi bi-person-check"></i>
+                <p class="mb-0">No students recognized yet</p>
+                <small class="text-muted">Successfully scanned students will appear here</small>
+              </div>
+            </li>
+          </ul>
+          
+        </div>
+        
+        <!-- Instructions Panel -->
+        <div class="card mt-3 bg-light border-0">
+          <div class="card-body">
+            <h6 class="fw-bold text-secondary mb-2">
+              <i class="bi bi-lightbulb-fill me-1"></i>
+              How to Use
+            </h6>
+            <ol class="small mb-0 ps-3">
+              <li>Click <strong>"Start Scan"</strong> to activate the camera</li>
+              <li>Position your face in the center of the frame</li>
+              <li>Wait for the 10-second countdown to complete</li>
+              <li>Stay still during the AI scan</li>
+              <li>Check the LCD screen for instant feedback</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+    
+    <!-- =====================================================
+         FOOTER: NAVIGATION & INFO
+         ===================================================== -->
+    <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+      <a href="/" class="text-decoration-none text-secondary">
+        <i class="bi bi-arrow-left-circle-fill me-1"></i>
+        Return to Dashboard
+      </a>
+      
+      <div class="text-muted small">
+        <i class="bi bi-shield-check me-1"></i>
+        Secure AI Recognition | Confidence Threshold: 35%
+      </div>
+    </div>
+    
   </div>
 </div>
+
+<!-- =====================================================
+     JAVASCRIPT: CAMERA CONTROL LOGIC
+     ===================================================== -->
 <script src="{{ url_for('static', filename='js/camera_mark.js') }}"></script>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
+
 </body>
 </html>
