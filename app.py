@@ -138,6 +138,7 @@ def attendance_stats():
 # ADD STUDENT
 # ---------------------------------------------------------
 @app.route("/add_student", methods=["GET", "POST"])
+@app.route("/enrollment", methods=["GET", "POST"])
 def add_student():
     if request.method == "GET":
         return render_template("add_student.html")
@@ -227,6 +228,14 @@ def recognize_face():
             "status": "error",
             "message": "No image provided"
         }), 400
+
+#---------------------------------------------------------
+# ADMIN LOGIN PAGE
+#---------------------------------------------------------
+@app.route("/admin/login")
+def admin_login():
+    return render_template("admin_view.html")
+
 
     # ------------------ FACE EMBEDDING ------------------
     emb = extract_embedding_for_image(request.files["image"].stream)

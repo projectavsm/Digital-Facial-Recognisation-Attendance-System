@@ -112,33 +112,45 @@ def get_scan_result():
 
 @app.route('/add_student_pi', methods=['POST'])
 def add_student_from_pi():
-    """
-    Saves new student info. 
-    Renamed to add_student_pi to avoid conflict with app.py.
-    """
     try:
+        # 1. Get Form Data
         name = request.form.get('name')
         roll = request.form.get('roll')
         reg_no = request.form.get('reg_no')
         class_name = request.form.get('class')
         section = request.form.get('sec')
         
+        # 2. GENERATE THE STRING ID
+        student_id = f"S{int(time.time() * 1000)}" 
+
         with app.app_context():
-            result = db.session.execute(
+            # 3. INSERT into DB
+            db.session.execute(
                 text("""
-                    INSERT INTO users (name, roll, reg_no, class, section) 
-                    VALUES (:name, :roll, :reg_no, :class, :sec)
+                    INSERT INTO users (user_id, name, roll, reg_no, class, section, role) 
+                    VALUES (:id, :name, :roll, :reg_no, :class, :sec, 'student')
                 """),
-                {"name": name, "roll": roll, "reg_no": reg_no, "class": class_name, "sec": section}
+                {
+                    "id": student_id, 
+                    "name": name, 
+                    "roll": roll, 
+                    "reg_no": reg_no, 
+                    "class": class_name, 
+                    "sec": section
+                }
             )
             db.session.commit()
-            student_id = result.lastrowid
+            
+            # 4. Create the folder immediately
+            os.makedirs(os.path.join('dataset', student_id), exist_ok=True)
             
             log_event("ENROLL", f"Registered: {name} (ID: {student_id})")
-            return jsonify({"status": "success", "student_id": str(student_id)})
-            
+            return jsonify({"status": "success", "student_id": student_id})
+
     except Exception as e:
-        log_event("ERROR", f"Enrollment failed: {str(e)}")
+        # THIS IS WHAT WAS MISSING:
+        log_event("ERROR", f"Database error: {str(e)}")
+        db.session.rollback()  # Undo any half-finished DB work
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/trigger_capture')
