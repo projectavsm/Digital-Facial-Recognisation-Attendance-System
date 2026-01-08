@@ -166,7 +166,7 @@ def trigger_capture():
         return jsonify({"error": "No student_id provided"}), 400
 
     def capture_sequence(sid):
-        global system_state
+        global system_state, latest_frame
         with state_lock:
             system_state = "ALIGNING"
         
@@ -179,12 +179,18 @@ def trigger_capture():
         log_event("ENROLL", f"Capturing 50 images for ID: {sid}")
         
         captured_count = 0
-        for i in range(50):
-            frame = get_single_frame()
-            if frame is not None:
-                cv2.imwrite(os.path.join(dataset_path, f"img_{i}.jpg"), frame)
+        # Increased range to ensure we get 50 good ones
+        for i in range(100): 
+            if captured_count >= 50:
+                break
+                
+            # Use the global buffer instead of re-opening the camera
+            if latest_frame is not None:
+                frame_to_save = latest_frame.copy()
+                cv2.imwrite(os.path.join(dataset_path, f"img_{captured_count}.jpg"), frame_to_save)
                 captured_count += 1
-            time.sleep(0.05)
+                # Small delay to allow user to move slightly for different angles
+                time.sleep(0.2) 
         
         log_event("ENROLL", f"Capture complete: {captured_count}/50 saved")
         with state_lock:
