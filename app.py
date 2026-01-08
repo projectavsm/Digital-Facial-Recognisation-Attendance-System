@@ -229,12 +229,54 @@ def recognize_face():
             "message": "No image provided"
         }), 400
 
-#---------------------------------------------------------
-# ADMIN LOGIN PAGE
-#---------------------------------------------------------
+
+# ---------------------------------------------------------
+# WEB ROUTES: ADMIN DATASET VIEWER (NEW INTEGRATION)
+# ---------------------------------------------------------
+
+@app.route("/admin/view/<student_id>")
+def admin_view_student(student_id):
+    """
+    Displays the captured images for a specific student.
+    Uses student_id for folder pathing and name for UI display.
+    """
+    try:
+        # 1. Fetch Student Name from DB
+        res = db.session.execute(
+            text("SELECT name FROM users WHERE user_id = :sid"), 
+            {"sid": student_id}
+        ).fetchone()
+
+        if not res:
+            flash("Student ID not found in database.", "danger")
+            return redirect(url_for('index'))
+        
+        student_name = res[0]
+
+        # 2. Check for images in the dataset folder
+        folder_path = os.path.join(DATASET_DIR, student_id)
+        if os.path.exists(folder_path):
+            # Grab all jpg/png files
+            images = [f for f in os.listdir(folder_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            # Optional: Sort them numerically (0.jpg, 1.jpg...)
+            images.sort()
+        else:
+            images = []
+
+        return render_template(
+            "admin_view.html", 
+            student_id=student_id, 
+            student_name=student_name, 
+            images=images
+        )
+    except Exception as e:
+        print(f"Admin View Error: {e}")
+        return "Internal Server Error", 500
+
 @app.route("/admin/login")
 def admin_login():
-    return render_template("admin_view.html")
+    """Simple redirect or placeholder for login logic."""
+    return render_template("admin_view.html", student_name="Select a Student", images=[])
 
 
     # ------------------ FACE EMBEDDING ------------------

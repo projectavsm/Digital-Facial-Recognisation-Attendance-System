@@ -16,6 +16,7 @@ from datetime import datetime
 from flask import render_template, request, redirect, url_for, Response, jsonify
 from sqlalchemy import text
 from app import app, db  # Inherits all routes from app.py
+from flask import render_template, request, redirect, url_for, Response, jsonify, send_from_directory
 
 # Computer Vision & AI libraries
 import cv2
@@ -155,6 +156,19 @@ def add_student_from_pi():
         log_event("ERROR", f"Enrollment Failed: {str(e)}")
         db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/dataset_link/<path:filename>')
+def serve_dataset(filename):
+    """
+    Acts as a bridge between the /dataset_link/ URL and the 
+    actual 'dataset' folder on the Pi's storage.
+    """
+    # Safety Check: Ensure the dataset folder exists
+    if not os.path.exists('dataset'):
+        os.makedirs('dataset')
+        
+    return send_from_directory('dataset', filename)
 
 @app.route('/trigger_capture')
 def trigger_capture():
