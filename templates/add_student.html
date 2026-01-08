@@ -107,15 +107,6 @@
             </div>
           </div>
         </div>
-
-        <div class="info-panel">
-          <h5><i class="bi bi-lightbulb-fill me-2"></i>Usage Tips</h5>
-          <ul class="small">
-            <li>Press <b>Enter</b> to move to the next field automatically.</li>
-            <li>Click <b>Save Information</b> only when all fields with * are filled.</li>
-            <li>The Pi will wait 10 seconds for you to pose after starting capture.</li>
-          </ul>
-        </div>
       </div>
       
       <div class="text-center mt-3">
@@ -128,30 +119,28 @@
 </div>
 
 <script>
-  // 1. Enter Key Navigation Logic
-  // This prevents the "Enter" key from submitting the form and instead moves focus to the next input field.
+  // UPDATED: Enter Key Navigation & Submission Block
   document.getElementById('studentForm').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
+      // Always prevent default to stop page refresh
+      e.preventDefault(); 
+      
       const activeElement = document.activeElement;
       if (activeElement.tagName === 'INPUT') {
-        e.preventDefault(); // Stop the form from submitting
-        
-        // Find all focusable inputs
         const inputs = Array.from(this.querySelectorAll('input'));
         const currentIndex = inputs.indexOf(activeElement);
         
-        // Move to next input if it exists
+        // Move focus or click Save if on the last field
         if (currentIndex > -1 && currentIndex < inputs.length - 1) {
           inputs[currentIndex + 1].focus();
         } else {
-          // If it's the last input, remove focus (keyboard hides on mobile)
-          activeElement.blur();
+          // Manually trigger the Save button click
+          document.getElementById('saveInfoBtn').click();
         }
       }
     }
   });
 
-  // 2. Progress Bar Text Observer
   const progressBar = document.getElementById('progressBar');
   const observer = new MutationObserver(() => {
     progressBar.textContent = progressBar.style.width;

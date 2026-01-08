@@ -110,21 +110,24 @@ def get_scan_result():
 # WEB ROUTES: STUDENT ENROLLMENT (Pi-Specific Logic)
 # =========================================================
 
+# Updated Route in run_pi.py
 @app.route('/add_student_pi', methods=['POST'])
 def add_student_from_pi():
     try:
-        # 1. Get Form Data
+        # 1. Capture form data from request
         name = request.form.get('name')
         roll = request.form.get('roll')
         reg_no = request.form.get('reg_no')
         class_name = request.form.get('class')
         section = request.form.get('sec')
         
-        # 2. GENERATE THE STRING ID
+        # 2. Generate a Unique ID (Matches app.py logic)
+        # Result example: S1706240000000
         student_id = f"S{int(time.time() * 1000)}" 
 
         with app.app_context():
-            # 3. INSERT into DB
+            # 3. Securely insert into database
+            # Ensure your user_id column in MySQL is VARCHAR(50)
             db.session.execute(
                 text("""
                     INSERT INTO users (user_id, name, roll, reg_no, class, section, role) 
@@ -141,16 +144,16 @@ def add_student_from_pi():
             )
             db.session.commit()
             
-            # 4. Create the folder immediately
+            # 4. Create the folder where 50 images will be stored
             os.makedirs(os.path.join('dataset', student_id), exist_ok=True)
             
-            log_event("ENROLL", f"Registered: {name} (ID: {student_id})")
+            log_event("ENROLL", f"Success: {name} (ID: {student_id})")
             return jsonify({"status": "success", "student_id": student_id})
 
     except Exception as e:
-        # THIS IS WHAT WAS MISSING:
-        log_event("ERROR", f"Database error: {str(e)}")
-        db.session.rollback()  # Undo any half-finished DB work
+        # Catch errors like duplicate roll numbers or DB disconnection
+        log_event("ERROR", f"Enrollment Failed: {str(e)}")
+        db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/trigger_capture')
