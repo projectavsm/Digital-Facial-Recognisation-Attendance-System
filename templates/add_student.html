@@ -90,7 +90,7 @@
 </div>
 
 <script>
-  // IMPROVED: Enter Key Navigation & Forced Save Trigger
+  // Enter Key Navigation
   document.getElementById('studentForm').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
       e.preventDefault(); 
@@ -101,16 +101,18 @@
         if (currentIndex > -1 && currentIndex < inputs.length - 1) {
           inputs[currentIndex + 1].focus();
         } else {
-          // Manually call the save function from the JS file
           document.getElementById('saveInfoBtn').click();
         }
       }
     }
   });
 
-  const progressBar = document.getElementById('progressBar');
-  const observer = new MutationObserver(() => { progressBar.textContent = progressBar.style.width; });
-  observer.observe(progressBar, { attributes: true, attributeFilter: ['style'] });
+  // REMOVED 'const progressBar' from here because it's already in camera_add_student.js
+  const htmlProgressBar = document.getElementById('progressBar'); 
+  const progressObserver = new MutationObserver(() => { 
+    htmlProgressBar.textContent = htmlProgressBar.style.width; 
+  });
+  progressObserver.observe(htmlProgressBar, { attributes: true, attributeFilter: ['style'] });
 </script>
 <script src="{{ url_for('static', filename='js/camera_add_student.js') }}"></script>
 </body>
