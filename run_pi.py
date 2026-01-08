@@ -86,6 +86,36 @@ def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # =========================================================
+# NEW PAGE NAVIGATION ROUTES (PASTE HERE)
+# =========================================================
+
+@app.route('/')
+def index():
+    """Renders the main dashboard (index.html)"""
+    return render_template('index.html')
+
+@app.route('/enrollment')
+def add_student_page():
+    """Renders the enrollment form (add_student.html)"""
+    return render_template('add_student.html')
+
+@app.route('/mark_attendance')
+def mark_attendance_page():
+    """Renders the scanning page (mark_attendance.html)"""
+    return render_template('mark_attendance.html')
+
+@app.route('/attendance_record')
+def attendance_record_page():
+    """Renders the records/history page"""
+    return render_template('attendance_record.html')
+
+@app.route('/admin/login')
+def admin_login():
+    """Renders the admin view page"""
+    return render_template('admin_view.html')
+
+
+# =========================================================
 # WEB ROUTES: ATTENDANCE MARKING
 # =========================================================
 

@@ -1,6 +1,6 @@
 /**
  * =========================================================
- * camera_add_student.js - Student Enrollment Controller (Fixed)
+ * camera_add_student.js - Student Enrollment Controller
  * =========================================================
  * PURPOSE:
  * 1. Submit student information to database
@@ -14,174 +14,126 @@
 // DOM ELEMENT REFERENCES
 // =========================================================
 const studentForm = document.getElementById("studentForm");
+const saveInfoBtn = document.getElementById("saveInfoBtn");
 const startCaptureBtn = document.getElementById("startCaptureBtn");
 const addStudentBtn = document.getElementById("addStudentBtn");
 const videoFeed = document.getElementById("video");
+const cameraPlaceholder = document.getElementById("cameraPlaceholder");
 const captureStatus = document.getElementById("captureStatus");
 const progressBar = document.getElementById("progressBar");
 
 // =========================================================
 // STATE TRACKING
 // =========================================================
-// Stores the student_id returned from the database
-// Needed to tell the Pi which folder to save images to
 let student_id = null;
 
 // =========================================================
-// STEP 1: SAVE STUDENT INFORMATION TO DATABASE
+// STEP 1: SAVE STUDENT INFORMATION
 // =========================================================
-/**
- * Form submission handler.
- * Sends student data to backend and receives student_id.
- * 
- * Workflow:
- * 1. Validate form data
- * 2. Send POST request to /add_student
- * 3. Store returned student_id
- * 4. Enable capture button
- */
 studentForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     
-    // Disable submit to prevent double-submission
-    const submitBtn = studentForm.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.innerText = "Saving...";
+    // UI Loading State
+    saveInfoBtn.disabled = true;
+    saveInfoBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...`;
     
-    // Gather form data
     const formData = new FormData(studentForm);
     
     try {
-        // Send to backend
         const res = await fetch("/add_student", {
             method: "POST",
             body: formData
         });
         
-        if (!res.ok) {
-            throw new Error("Failed to save student information");
-        }
+        if (!res.ok) throw new Error("Server communication error.");
         
         const data = await res.json();
         
         if (data.status === "success") {
-            // Store the student_id for later use
             student_id = data.student_id;
             
-            // Update UI to show success
+            // Success UI Feedback
             captureStatus.innerText = `✓ Student saved (ID: ${student_id}). Ready for capture.`;
-            captureStatus.className = "fw-bold text-success mb-1";
+            captureStatus.className = "fw-bold text-success mb-2 p-2 border border-success rounded bg-light";
             
-            // Enable the capture button
+            // Enable Next Step
             startCaptureBtn.disabled = false;
             
-            // Update submit button
-            submitBtn.innerText = "✓ Saved";
-            submitBtn.classList.replace("btn-primary", "btn-success");
+            // Style Update for Step 1 Button
+            saveInfoBtn.innerText = "✓ Information Saved";
+            saveInfoBtn.classList.replace("btn-primary", "btn-success");
             
-            alert(`Student information saved successfully!\n\nID: ${student_id}\n\nNow click 'Start Pi-Capture' to take training photos.`);
-            
+            // Lock inputs to prevent accidental changes after saving
+            const inputs = studentForm.querySelectorAll("input");
+            inputs.forEach(input => input.readOnly = true);
+
         } else {
             throw new Error(data.message || "Unknown error");
         }
         
     } catch (err) {
         console.error("Save error:", err);
-        alert("Failed to save student information: " + err.message);
-        
-        // Reset button
-        submitBtn.disabled = false;
-        submitBtn.innerText = "1. Save Information";
-        
-        captureStatus.innerText = "Error: " + err.message;
-        captureStatus.className = "fw-bold text-danger mb-1";
+        captureStatus.innerText = "❌ Error: " + err.message;
+        captureStatus.className = "fw-bold text-danger mb-2";
+        saveInfoBtn.disabled = false;
+        saveInfoBtn.innerText = "1. Save Information";
+        alert("Failed to save: " + err.message);
     }
 });
 
 // =========================================================
-// STEP 2: TRIGGER PI CAMERA CAPTURE SEQUENCE
+// STEP 2: TRIGGER PI CAMERA CAPTURE
 // =========================================================
-/**
- * Initiates the image capture process on the Pi.
- * 
- * Workflow:
- * 1. Display Pi's live camera feed
- * 2. Send capture trigger to Pi with student_id
- * 3. Start UI countdown and progress bar
- * 4. Monitor capture completion
- */
 startCaptureBtn.addEventListener("click", async () => {
-    if (!student_id) {
-        alert("Error: No student ID found. Please save information first.");
-        return;
-    }
-    
-    // Disable button to prevent multiple triggers
+    if (!student_id) return;
+
     startCaptureBtn.disabled = true;
-    
-    // Update status
     captureStatus.innerText = "Connecting to Pi Camera...";
-    captureStatus.className = "fw-bold text-info mb-1";
+    captureStatus.className = "fw-bold text-info mb-2";
     
     try {
-        // Step 1: Display the Pi's MJPEG stream
-        // This allows the user to see themselves and position correctly
+        // Show Video, Hide Placeholder
+        cameraPlaceholder.style.display = "none";
         videoFeed.src = "/video_feed";
         videoFeed.style.display = "block";
         
-        // Step 2: Trigger the capture sequence on the Pi
         const res = await fetch(`/trigger_capture?student_id=${student_id}`);
-        
-        if (!res.ok) {
-            throw new Error("Failed to trigger capture");
-        }
+        if (!res.ok) throw new Error("Could not reach Pi Camera.");
         
         const data = await res.json();
         
         if (data.status === "capturing") {
-            // Step 3: Start UI feedback sequence
             handleEnrollmentUI();
         } else {
-            throw new Error(data.message || "Unknown capture error");
+            throw new Error(data.message || "Capture initialization failed.");
         }
         
     } catch (err) {
         console.error("Capture trigger failed:", err);
-        
-        captureStatus.innerText = "Error: Could not communicate with Pi";
-        captureStatus.className = "fw-bold text-danger mb-1";
-        
+        captureStatus.innerText = "❌ Camera Error: " + err.message;
+        captureStatus.className = "fw-bold text-danger mb-2";
         startCaptureBtn.disabled = false;
         
-        alert("Failed to start capture: " + err.message);
+        // Revert UI to placeholder if camera fails
+        videoFeed.style.display = "none";
+        cameraPlaceholder.style.display = "flex";
     }
 });
 
 // =========================================================
-// STEP 3: HANDLE UI FEEDBACK DURING CAPTURE
+// STEP 3: HANDLE UI FEEDBACK (TIMERS)
 // =========================================================
-/**
- * Manages the visual feedback during the enrollment process.
- * 
- * Phase 1 (0-10s): Alignment countdown
- * Phase 2 (10-12.5s): Image capture with progress bar
- */
 function handleEnrollmentUI() {
     let timeLeft = 10;
     
-    // =====================================================
-    // PHASE 1: ALIGNMENT COUNTDOWN (10 seconds)
-    // =====================================================
+    // Phase 1: Alignment (0-10s)
     const alignTimer = setInterval(() => {
         timeLeft -= 1;
-        
-        // Update status text
         captureStatus.innerText = `⏱ Aligning... Stay centered! Scan starts in ${timeLeft}s`;
-        captureStatus.className = "fw-bold text-warning mb-1";
+        captureStatus.className = "fw-bold text-warning mb-2";
         
-        // Progress bar: 0% to 50% during alignment
-        const alignmentProgress = ((10 - timeLeft) / 10) * 50;
-        progressBar.style.width = `${alignmentProgress}%`;
+        // Progress: 0 to 50%
+        progressBar.style.width = `${((10 - timeLeft) / 10) * 50}%`;
         
         if (timeLeft <= 0) {
             clearInterval(alignTimer);
@@ -190,24 +142,18 @@ function handleEnrollmentUI() {
     }, 1000);
 }
 
-/**
- * Phase 2: Actual image capture with visual feedback.
- * Pi captures 50 images over ~2.5 seconds (50 frames * 0.05s delay).
- */
 function startCapturePhase() {
-    captureStatus.innerText = "📸 Capturing 50 images... Move your head slightly!";
-    captureStatus.className = "fw-bold text-primary mb-1";
+    captureStatus.innerText = "📸 Capturing Images... Rotate your head slowly!";
+    captureStatus.className = "fw-bold text-primary mb-2";
     
     let captureProgress = 0;
-    const totalCaptureDuration = 2500; // 2.5 seconds (matches Pi's actual timing)
-    const updateInterval = 250; // Update every 250ms (10 updates total)
+    const updateInterval = 250; 
     
     const captureInterval = setInterval(() => {
-        captureProgress += 10; // Increment by 10% each update
+        captureProgress += 10; 
         
-        // Progress bar: 50% to 100% during capture
-        const totalProgress = 50 + (captureProgress / 2);
-        progressBar.style.width = `${totalProgress}%`;
+        // Progress: 50 to 100%
+        progressBar.style.width = `${50 + (captureProgress / 2)}%`;
         
         if (captureProgress >= 100) {
             clearInterval(captureInterval);
@@ -217,89 +163,44 @@ function startCapturePhase() {
 }
 
 // =========================================================
-// STEP 4: FINALIZE ENROLLMENT
+// STEP 4: FINALIZE
 // =========================================================
-/**
- * Called after capture completes.
- * Updates UI and enables the finish button.
- */
 function finishEnrollment() {
-    // Update status to success
-    captureStatus.innerText = "✓ Success! 50 images saved to Pi local storage.";
-    captureStatus.className = "fw-bold text-success mb-1";
+    captureStatus.innerText = "✓ Capture Complete! 50 images stored.";
+    captureStatus.className = "fw-bold text-success mb-2 p-2 bg-light border border-success rounded";
     
-    // Ensure progress bar is at 100%
     progressBar.style.width = "100%";
     progressBar.classList.remove("progress-bar-animated");
     
-    // Enable finish button
+    // Enable Final Button
     addStudentBtn.disabled = false;
     addStudentBtn.classList.add("pulse-animation");
-    
-    // Show completion message
-    setTimeout(() => {
-        alert("Enrollment Complete!\n\n50 training images captured successfully.\n\nIMPORTANT: You must run 'manual_fix.py' to retrain the model before this student can be recognized.");
-    }, 500);
 }
 
-// =========================================================
-// FINISH BUTTON HANDLER
-// =========================================================
-/**
- * Redirects to dashboard after enrollment completion.
- * Reminds user about model retraining requirement.
- */
 addStudentBtn.addEventListener("click", () => {
-    const message = `Enrollment complete for Student ID: ${student_id}\n\n` +
-                   `NEXT STEPS:\n` +
-                   `1. SSH into the Pi\n` +
-                   `2. Run: python3 manual_fix.py\n` +
-                   `3. Wait for model retraining to complete\n` +
-                   `4. This student will then be recognizable\n\n` +
-                   `Return to dashboard?`;
+    const message = `Student ${student_id} Enrolled.\n\n` +
+                    `NOTICE: You must run manual_fix.py via SSH to retrain the AI.\n\n` +
+                    `Return to dashboard?`;
     
     if (confirm(message)) {
         window.location.href = "/";
     }
 });
 
-// =========================================================
-// PAGE LOAD INITIALIZATION
-// =========================================================
-/**
- * Ensures UI is in correct initial state when page loads.
- */
+// Initial Setup
 document.addEventListener("DOMContentLoaded", () => {
-    // Ensure capture button is disabled until student info is saved
     startCaptureBtn.disabled = true;
     addStudentBtn.disabled = true;
-    
-    // Set initial status
-    captureStatus.innerText = "Status: Complete the form above to begin";
-    captureStatus.className = "fw-bold text-muted mb-1";
-    
-    // Reset progress bar
     progressBar.style.width = "0%";
 });
 
-// =========================================================
-// UTILITY: ADD PULSE ANIMATION CSS DYNAMICALLY
-// =========================================================
-/**
- * Adds a subtle pulse animation to draw attention to the finish button.
- */
-if (!document.querySelector('#pulse-animation-style')) {
+// Pulse Animation Styling (if not in CSS file)
+if (!document.querySelector('#pulse-style')) {
     const style = document.createElement('style');
-    style.id = 'pulse-animation-style';
+    style.id = 'pulse-style';
     style.textContent = `
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-        .pulse-animation {
-            animation: pulse 1.5s ease-in-out infinite;
-        }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.02); } 100% { opacity: 1; transform: scale(1); } }
+        .pulse-animation { animation: pulse 1.5s infinite; box-shadow: 0 0 15px rgba(25, 135, 84, 0.5); }
     `;
     document.head.appendChild(style);
 }

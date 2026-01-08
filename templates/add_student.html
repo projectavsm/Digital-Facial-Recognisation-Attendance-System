@@ -5,20 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Add Student | Pi Face AI</title>
   
-  <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
-  
-  <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  
-  <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   
   <style>
-    /* =====================================================
-       CAMERA PREVIEW CONTAINER
-       ===================================================== */
-    
     .capture-box {
       background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
       border-radius: 12px;
@@ -27,184 +18,19 @@
       display: inline-block;
       position: relative;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-      transition: all 0.3s ease;
     }
-    
-    .capture-box:hover {
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-      transform: translateY(-2px);
-    }
-    
-    /* Pi camera stream display */
-    #video {
-      display: none; /* Hidden until capture starts */
-      width: 100%;
-      max-width: 640px;
-      height: auto;
-      min-height: 480px;
-      object-fit: cover;
-    }
-    
-    /* Placeholder when camera is idle */
-    .camera-placeholder {
-      width: 640px;
-      height: 480px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      color: #6c757d;
-    }
-    
-    .camera-placeholder i {
-      font-size: 5rem;
-      margin-bottom: 1rem;
-      opacity: 0.4;
-    }
-    
-    /* =====================================================
-       PROGRESS BAR STYLING
-       ===================================================== */
-    
-    .progress {
-      height: 24px;
-      border-radius: 12px;
-      background-color: #e9ecef;
-      overflow: hidden;
-      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    
-    .progress-bar {
-      transition: width 0.3s ease;
-      font-size: 0.875rem;
-      font-weight: 600;
-    }
-    
-    /* =====================================================
-       STEP BUTTONS
-       ===================================================== */
-    
-    .step-buttons .btn {
-      min-width: 200px;
-      font-weight: 600;
-      transition: all 0.2s ease;
-      position: relative;
-    }
-    
-    .step-buttons .btn:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-    }
-    
-    .step-buttons .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    
-    /* Step number badges */
+    #video { display: none; width: 100%; max-width: 640px; height: auto; min-height: 480px; object-fit: cover; }
+    .camera-placeholder { width: 640px; height: 480px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #6c757d; }
+    .camera-placeholder i { font-size: 5rem; margin-bottom: 1rem; opacity: 0.4; }
+    .progress { height: 24px; border-radius: 12px; background-color: #e9ecef; overflow: hidden; }
+    .step-buttons .btn { min-width: 200px; font-weight: 600; position: relative; }
     .step-buttons .btn::before {
       content: attr(data-step);
-      position: absolute;
-      left: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 28px;
-      height: 28px;
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.875rem;
-      font-weight: 700;
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      width: 28px; height: 28px; background: rgba(255, 255, 255, 0.3);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
     }
-    
-    /* =====================================================
-       FORM STYLING
-       ===================================================== */
-    
-    .card {
-      border: none;
-      border-radius: 15px;
-    }
-    
-    .form-label {
-      color: #495057;
-      margin-bottom: 0.5rem;
-    }
-    
-    .form-control {
-      border-radius: 8px;
-      border: 2px solid #dee2e6;
-      transition: all 0.2s ease;
-    }
-    
-    .form-control:focus {
-      border-color: #0d6efd;
-      box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
-    }
-    
-    /* =====================================================
-       STATUS DISPLAY
-       ===================================================== */
-    
-    #captureStatus {
-      padding: 1rem;
-      border-radius: 8px;
-      background-color: #f8f9fa;
-      border: 2px solid #dee2e6;
-      min-height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.3s ease;
-    }
-    
-    /* =====================================================
-       INFO PANELS
-       ===================================================== */
-    
-    .info-panel {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 1.5rem;
-      border-radius: 12px;
-      margin-top: 2rem;
-    }
-    
-    .info-panel h5 {
-      margin-bottom: 1rem;
-      font-weight: 700;
-    }
-    
-    .info-panel ul {
-      margin-bottom: 0;
-      padding-left: 1.5rem;
-    }
-    
-    .info-panel li {
-      margin-bottom: 0.5rem;
-    }
-    
-    /* =====================================================
-       RESPONSIVE DESIGN
-       ===================================================== */
-    
-    @media (max-width: 768px) {
-      .camera-placeholder {
-        width: 100%;
-        height: 360px;
-      }
-      
-      #video {
-        min-height: 360px;
-      }
-      
-      .step-buttons .btn {
-        min-width: 100%;
-        margin-bottom: 0.5rem;
-      }
-    }
+    .info-panel { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; border-radius: 12px; margin-top: 2rem; }
   </style>
 </head>
 
@@ -214,253 +40,127 @@
   <div class="row justify-content-center">
     <div class="col-md-10 col-lg-9">
       
-      <!-- =====================================================
-           MAIN CARD: STUDENT ENROLLMENT FORM
-           ===================================================== -->
-      <div class="card p-4 shadow-lg">
-        
-        <!-- Header -->
+      <div class="card p-4 shadow-lg border-0" style="border-radius: 15px;">
         <div class="text-center mb-4">
-          <h3 class="text-primary mb-2">
-            <i class="bi bi-person-plus-fill me-2"></i>
-            Student Enrollment
-          </h3>
-          <p class="text-muted small mb-0">
-            Complete all three steps to add a new student to the system
-          </p>
+          <h3 class="text-primary mb-2"><i class="bi bi-person-plus-fill me-2"></i>Student Enrollment</h3>
+          <p class="text-muted small">Fill all details. Use <b>Enter</b> to navigate between boxes.</p>
         </div>
         
-        <!-- =====================================================
-             STEP 1: STUDENT INFORMATION FORM
-             ===================================================== -->
         <form id="studentForm" class="mb-4">
           <div class="row g-3">
-            
-            <!-- Full Name -->
             <div class="col-md-12">
-              <label class="form-label fw-bold">
-                <i class="bi bi-person-fill me-1"></i>
-                Full Name *
-              </label>
-              <input 
-                class="form-control form-control-lg" 
-                name="name" 
-                placeholder="Enter student's full name" 
-                required
-                autocomplete="off"
-              >
+              <label class="form-label fw-bold"><i class="bi bi-person-fill me-1"></i>Full Name *</label>
+              <input class="form-control form-control-lg" name="name" placeholder="Full Name" required autocomplete="off">
             </div>
             
-            <!-- Roll Number -->
             <div class="col-md-6">
-              <label class="form-label fw-bold">
-                <i class="bi bi-123 me-1"></i>
-                Roll Number
-              </label>
-              <input 
-                class="form-control" 
-                name="roll" 
-                placeholder="e.g., 2024001"
-                autocomplete="off"
-              >
+              <label class="form-label fw-bold"><i class="bi bi-123 me-1"></i>Roll Number *</label>
+              <input class="form-control" name="roll" placeholder="e.g., 2024001" required autocomplete="off">
             </div>
             
-            <!-- Registration Number -->
             <div class="col-md-6">
-              <label class="form-label fw-bold">
-                <i class="bi bi-card-text me-1"></i>
-                Registration No
-              </label>
-              <input 
-                class="form-control" 
-                name="reg_no" 
-                placeholder="e.g., REG-2024-001"
-                autocomplete="off"
-              >
+              <label class="form-label fw-bold"><i class="bi bi-card-text me-1"></i>Registration No *</label>
+              <input class="form-control" name="reg_no" placeholder="e.g., REG-2024-001" required autocomplete="off">
             </div>
             
-            <!-- Class -->
             <div class="col-md-6">
-              <label class="form-label fw-bold">
-                <i class="bi bi-mortarboard-fill me-1"></i>
-                Class
-              </label>
-              <input 
-                class="form-control" 
-                name="class" 
-                placeholder="e.g., Grade 10"
-                autocomplete="off"
-              >
+              <label class="form-label fw-bold"><i class="bi bi-mortarboard-fill me-1"></i>Class *</label>
+              <input class="form-control" name="class" placeholder="e.g., Grade 10" required autocomplete="off">
             </div>
             
-            <!-- Section -->
             <div class="col-md-6">
-              <label class="form-label fw-bold">
-                <i class="bi bi-grid-3x3-gap-fill me-1"></i>
-                Section
-              </label>
-              <input 
-                class="form-control" 
-                name="sec" 
-                placeholder="e.g., A"
-                autocomplete="off"
-              >
+              <label class="form-label fw-bold"><i class="bi bi-grid-3x3-gap-fill me-1"></i>Section</label>
+              <input class="form-control" name="sec" placeholder="e.g., A" autocomplete="off">
             </div>
           </div>
           
-          <!-- =====================================================
-               ACTION BUTTONS (3-STEP PROCESS)
-               ===================================================== -->
           <div class="mt-4 d-flex flex-wrap justify-content-center gap-2 step-buttons">
-            
-            <!-- Step 1: Submit Form -->
-            <button 
-              id="saveInfoBtn" 
-              type="submit" 
-              class="btn btn-primary btn-lg"
-              data-step="1"
-            >
-              <i class="bi bi-check-circle-fill me-2"></i>
-              Save Information
+            <button id="saveInfoBtn" type="submit" class="btn btn-primary btn-lg" data-step="1">
+              <i class="bi bi-check-circle-fill me-2"></i>Save Information
             </button>
-            
-            <!-- Step 2: Start Camera Capture -->
-            <button 
-              id="startCaptureBtn" 
-              type="button" 
-              class="btn btn-warning btn-lg" 
-              disabled
-              data-step="2"
-            >
-              <i class="bi bi-camera-fill me-2"></i>
-              Start Pi-Capture
+            <button id="startCaptureBtn" type="button" class="btn btn-warning btn-lg" disabled data-step="2">
+              <i class="bi bi-camera-fill me-2"></i>Start Pi-Capture
             </button>
-            
-            <!-- Step 3: Finish Enrollment -->
-            <button 
-              id="addStudentBtn" 
-              type="button" 
-              class="btn btn-success btn-lg" 
-              disabled
-              data-step="3"
-            >
-              <i class="bi bi-check-all me-2"></i>
-              Finish Enrollment
+            <button id="addStudentBtn" type="button" class="btn btn-success btn-lg" disabled data-step="3">
+              <i class="bi bi-check-all me-2"></i>Finish Enrollment
             </button>
           </div>
         </form>
         
         <hr class="my-4">
-        
-        <!-- =====================================================
-             CAMERA PREVIEW SECTION
-             ===================================================== -->
+
         <div class="text-center">
-          <h5 class="text-secondary mb-3">
-            <i class="bi bi-camera-video-fill me-2"></i>
-            Pi Camera Preview
-          </h5>
-          
-          <!-- Camera Container -->
           <div class="capture-box shadow-sm mb-3">
-            <!-- Placeholder (shown when idle) -->
             <div class="camera-placeholder" id="cameraPlaceholder">
               <i class="bi bi-camera-video"></i>
-              <p class="fw-bold">Camera Ready</p>
-              <small class="text-muted">Stream will start during capture</small>
+              <p class="fw-bold">Camera Standby</p>
             </div>
-            
-            <!-- Pi MJPEG stream (shown during capture) -->
-            <img id="video" src="" alt="Waiting for camera...">
+            <img id="video" src="" alt="Live Stream">
           </div>
           
-          <!-- Status & Progress -->
           <div class="mx-auto" style="max-width: 640px;">
-            
-            <!-- Status Message -->
             <div id="captureStatus" class="fw-bold text-muted mb-2">
-              <i class="bi bi-info-circle-fill me-2"></i>
-              Status: Complete the form above to begin
+              <i class="bi bi-info-circle-fill me-2"></i>Status: Waiting for Information
             </div>
-            
-            <!-- Progress Bar -->
             <div class="progress">
-              <div 
-                id="progressBar" 
-                class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
-                role="progressbar" 
-                style="width: 0%"
-              >
-                0%
-              </div>
+              <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%">0%</div>
             </div>
-            
-            <!-- Instructions -->
-            <p class="small text-muted mt-2 mb-0">
-              <i class="bi bi-lightbulb-fill me-1"></i>
-              The Pi will wait 10 seconds for alignment before capturing 50 training photos
-            </p>
           </div>
         </div>
-        
-        <!-- =====================================================
-             IMPORTANT INFORMATION PANEL
-             ===================================================== -->
+
         <div class="info-panel">
-          <h5>
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            Important: Post-Enrollment Steps
-          </h5>
-          <ul>
-            <li>
-              <strong>Model Retraining Required:</strong> After capturing images, you must SSH into the Pi and run <code class="text-white bg-dark px-2 py-1 rounded">python3 manual_fix.py</code>
-            </li>
-            <li>
-              <strong>Training Time:</strong> The retraining process takes 2-5 minutes depending on the number of students
-            </li>
-            <li>
-              <strong>Recognition Activation:</strong> The new student will only be recognizable after the model is retrained
-            </li>
-            <li>
-              <strong>Photo Guidelines:</strong> During capture, slightly move your head to create variation in the training data
-            </li>
+          <h5><i class="bi bi-lightbulb-fill me-2"></i>Usage Tips</h5>
+          <ul class="small">
+            <li>Press <b>Enter</b> to move to the next field automatically.</li>
+            <li>Click <b>Save Information</b> only when all fields with * are filled.</li>
+            <li>The Pi will wait 10 seconds for you to pose after starting capture.</li>
           </ul>
         </div>
-        
       </div>
       
-      <!-- =====================================================
-           FOOTER NAVIGATION
-           ===================================================== -->
       <div class="text-center mt-3">
         <a href="/" class="text-decoration-none text-secondary btn btn-outline-secondary">
-          <i class="bi bi-arrow-left-circle-fill me-1"></i>
-          Return to Main Dashboard
+          <i class="bi bi-arrow-left-circle-fill me-1"></i>Main Dashboard
         </a>
       </div>
-      
     </div>
   </div>
 </div>
 
-<!-- =====================================================
-     JAVASCRIPT: ENROLLMENT LOGIC
-     ===================================================== -->
-<script src="{{ url_for('static', filename='js/camera_add_student.js') }}"></script>
-
-<!-- Bootstrap JS Bundle -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
-
-<!-- Custom JavaScript for Progress Bar Text -->
 <script>
-  // Update progress bar text dynamically
+  // 1. Enter Key Navigation Logic
+  // This prevents the "Enter" key from submitting the form and instead moves focus to the next input field.
+  document.getElementById('studentForm').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      const activeElement = document.activeElement;
+      if (activeElement.tagName === 'INPUT') {
+        e.preventDefault(); // Stop the form from submitting
+        
+        // Find all focusable inputs
+        const inputs = Array.from(this.querySelectorAll('input'));
+        const currentIndex = inputs.indexOf(activeElement);
+        
+        // Move to next input if it exists
+        if (currentIndex > -1 && currentIndex < inputs.length - 1) {
+          inputs[currentIndex + 1].focus();
+        } else {
+          // If it's the last input, remove focus (keyboard hides on mobile)
+          activeElement.blur();
+        }
+      }
+    }
+  });
+
+  // 2. Progress Bar Text Observer
   const progressBar = document.getElementById('progressBar');
   const observer = new MutationObserver(() => {
-    const width = progressBar.style.width;
-    progressBar.textContent = width;
+    progressBar.textContent = progressBar.style.width;
   });
   observer.observe(progressBar, { attributes: true, attributeFilter: ['style'] });
 </script>
+
+<script src="{{ url_for('static', filename='js/camera_add_student.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
 </html>
