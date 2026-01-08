@@ -40,7 +40,7 @@ studentForm.addEventListener("submit", async (e) => {
     const formData = new FormData(studentForm);
     
     try {
-        const res = await fetch("/add_student", {
+        const res = await fetch("/add_student_pi", {
             method: "POST",
             body: formData
         });
