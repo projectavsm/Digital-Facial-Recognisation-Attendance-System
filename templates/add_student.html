@@ -4,70 +4,48 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Add Student | Pi Face AI</title>
-  
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  
   <style>
-    .capture-box {
-      background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-      border-radius: 12px;
-      overflow: hidden;
-      border: 3px solid #dee2e6;
-      display: inline-block;
-      position: relative;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-    }
+    .capture-box { background: linear-gradient(135deg, #000 0%, #1a1a1a 100%); border-radius: 12px; overflow: hidden; border: 3px solid #dee2e6; display: inline-block; position: relative; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); }
     #video { display: none; width: 100%; max-width: 640px; height: auto; min-height: 480px; object-fit: cover; }
     .camera-placeholder { width: 640px; height: 480px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #6c757d; }
     .camera-placeholder i { font-size: 5rem; margin-bottom: 1rem; opacity: 0.4; }
     .progress { height: 24px; border-radius: 12px; background-color: #e9ecef; overflow: hidden; }
     .step-buttons .btn { min-width: 200px; font-weight: 600; position: relative; }
-    .step-buttons .btn::before {
-      content: attr(data-step);
-      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-      width: 28px; height: 28px; background: rgba(255, 255, 255, 0.3);
-      border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    }
+    .step-buttons .btn::before { content: attr(data-step); position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; background: rgba(255, 255, 255, 0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
     .info-panel { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; border-radius: 12px; margin-top: 2rem; }
   </style>
 </head>
-
 <body class="bg-light">
-
 <div class="container my-5">
   <div class="row justify-content-center">
     <div class="col-md-10 col-lg-9">
-      
       <div class="card p-4 shadow-lg border-0" style="border-radius: 15px;">
         <div class="text-center mb-4">
           <h3 class="text-primary mb-2"><i class="bi bi-person-plus-fill me-2"></i>Student Enrollment</h3>
           <p class="text-muted small">Fill all details. Use <b>Enter</b> to navigate between boxes.</p>
         </div>
         
-        <form id="studentForm" class="mb-4">
+        <form id="studentForm" onsubmit="return false;" class="mb-4">
           <div class="row g-3">
             <div class="col-md-12">
               <label class="form-label fw-bold"><i class="bi bi-person-fill me-1"></i>Full Name *</label>
               <input class="form-control form-control-lg" name="name" placeholder="Full Name" required autocomplete="off">
             </div>
-            
             <div class="col-md-6">
               <label class="form-label fw-bold"><i class="bi bi-123 me-1"></i>Roll Number *</label>
               <input class="form-control" name="roll" placeholder="e.g., 2024001" required autocomplete="off">
             </div>
-            
             <div class="col-md-6">
               <label class="form-label fw-bold"><i class="bi bi-card-text me-1"></i>Registration No *</label>
               <input class="form-control" name="reg_no" placeholder="e.g., REG-2024-001" required autocomplete="off">
             </div>
-            
             <div class="col-md-6">
               <label class="form-label fw-bold"><i class="bi bi-mortarboard-fill me-1"></i>Class *</label>
               <input class="form-control" name="class" placeholder="e.g., Grade 10" required autocomplete="off">
             </div>
-            
             <div class="col-md-6">
               <label class="form-label fw-bold"><i class="bi bi-grid-3x3-gap-fill me-1"></i>Section</label>
               <input class="form-control" name="sec" placeholder="e.g., A" autocomplete="off">
@@ -75,7 +53,7 @@
           </div>
           
           <div class="mt-4 d-flex flex-wrap justify-content-center gap-2 step-buttons">
-            <button id="saveInfoBtn" type="submit" class="btn btn-primary btn-lg" data-step="1">
+            <button id="saveInfoBtn" type="button" class="btn btn-primary btn-lg" data-step="1">
               <i class="bi bi-check-circle-fill me-2"></i>Save Information
             </button>
             <button id="startCaptureBtn" type="button" class="btn btn-warning btn-lg" disabled data-step="2">
@@ -88,7 +66,6 @@
         </form>
         
         <hr class="my-4">
-
         <div class="text-center">
           <div class="capture-box shadow-sm mb-3">
             <div class="camera-placeholder" id="cameraPlaceholder">
@@ -97,44 +74,34 @@
             </div>
             <img id="video" src="" alt="Live Stream">
           </div>
-          
           <div class="mx-auto" style="max-width: 640px;">
-            <div id="captureStatus" class="fw-bold text-muted mb-2">
-              <i class="bi bi-info-circle-fill me-2"></i>Status: Waiting for Information
-            </div>
+            <div id="captureStatus" class="fw-bold text-muted mb-2"><i class="bi bi-info-circle-fill me-2"></i>Status: Waiting for Information</div>
             <div class="progress">
               <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%">0%</div>
             </div>
           </div>
         </div>
       </div>
-      
       <div class="text-center mt-3">
-        <a href="/" class="text-decoration-none text-secondary btn btn-outline-secondary">
-          <i class="bi bi-arrow-left-circle-fill me-1"></i>Main Dashboard
-        </a>
+        <a href="/" class="text-decoration-none text-secondary btn btn-outline-secondary"><i class="bi bi-arrow-left-circle-fill me-1"></i>Main Dashboard</a>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-  // UPDATED: Enter Key Navigation & Submission Block
+  // IMPROVED: Enter Key Navigation & Forced Save Trigger
   document.getElementById('studentForm').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
-      // Always prevent default to stop page refresh
       e.preventDefault(); 
-      
       const activeElement = document.activeElement;
       if (activeElement.tagName === 'INPUT') {
         const inputs = Array.from(this.querySelectorAll('input'));
         const currentIndex = inputs.indexOf(activeElement);
-        
-        // Move focus or click Save if on the last field
         if (currentIndex > -1 && currentIndex < inputs.length - 1) {
           inputs[currentIndex + 1].focus();
         } else {
-          // Manually trigger the Save button click
+          // Manually call the save function from the JS file
           document.getElementById('saveInfoBtn').click();
         }
       }
@@ -142,14 +109,9 @@
   });
 
   const progressBar = document.getElementById('progressBar');
-  const observer = new MutationObserver(() => {
-    progressBar.textContent = progressBar.style.width;
-  });
+  const observer = new MutationObserver(() => { progressBar.textContent = progressBar.style.width; });
   observer.observe(progressBar, { attributes: true, attributeFilter: ['style'] });
 </script>
-
 <script src="{{ url_for('static', filename='js/camera_add_student.js') }}"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
-
 </body>
 </html>
