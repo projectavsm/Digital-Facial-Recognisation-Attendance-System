@@ -187,7 +187,7 @@ def trigger_capture():
             # Use the global buffer instead of re-opening the camera
             if latest_frame is not None:
                 frame_to_save = latest_frame.copy()
-                cv2.imwrite(os.path.join(dataset_path, f"img_{captured_count}.jpg"), frame_to_save)
+                cv2.imwrite(os.path.join(dataset_path, f"{captured_count}.jpg"), frame_to_save)
                 captured_count += 1
                 # Small delay to allow user to move slightly for different angles
                 time.sleep(0.2) 
@@ -230,7 +230,7 @@ def camera_loop():
     global latest_frame, system_state, last_recognition_result
     
     system_message("System Online", "Ready to Scan")
-    mp_face = mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.4)
+    mp_face = mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.3)
     clf = load_model_if_exists()
     
     if clf is None:
@@ -270,7 +270,7 @@ def perform_recognition(frame, mp_face, clf):
 
     user_id, confidence = predict_with_model(clf, embedding)
     
-    if confidence > 0.35:
+    if confidence > 0.25:
         process_attendance(user_id, confidence)
     else:
         last_recognition_result = {"status": "failure", "message": "Low confidence"}
