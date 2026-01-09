@@ -275,8 +275,20 @@ def admin_view_student(student_id):
 
 @app.route("/admin/login")
 def admin_login():
-    """Simple redirect or placeholder for login logic."""
-    return render_template("admin_view.html", student_name="Select a Student", images=[])
+    """
+    Shows a list of all students so the admin can pick one.
+    """
+    try:
+        # 1. Fetch all students so the directory can build the list
+        # We fetch ID, Name, Class, and Section to match your admin_directory.html
+        query = text("SELECT user_id, name, class, section FROM users WHERE role = 'student'")
+        students = db.session.execute(query).fetchall()
+        
+        # 2. Render the DIRECTORY template, not the viewer template
+        return render_template("admin_directory.html", students=students)
+    except Exception as e:
+        print(f"Directory Error: {e}")
+        return redirect(url_for('index'))
 
 
     # ------------------ FACE EMBEDDING ------------------
