@@ -1,42 +1,64 @@
 # 🛡️ Digital Facial Recognition Attendance System (Pi 5 Edition)
 
-An automated attendance management system leveraging Raspberry Pi 5, MediaPipe, and Flask. This system identifies individuals in real-time, logs attendance to a MySQL database with hardware-level duplicate prevention, and provides a password-protected admin suite for dataset management.
+An automated, end-to-end attendance management system leveraging Raspberry Pi 5, MediaPipe, and Flask. This system bridges the gap between raw Computer Vision and a professional Web Dashboard, featuring a robust MySQL backend and a dynamic Admin suite.
 
 ## 🚀 System Architecture
 
-The system operates in three distinct layers:
-
-- **Hardware Layer:** Raspberry Pi 5 + Pi Camera Module (using persistent YUV streaming via rpicam-vid to bypass Libcamera locks)
+- **Hardware Layer:** Pi 5 + Pi Camera Module 3. We utilize rpicam-vid YUV streaming to bypass the V4L2/Libcamera locks that typically crash OpenCV on the Pi 5.
 - **Logic Layer:**
-    - Detection: Google MediaPipe Face Detection (Modern AI) or OpenCV Haar Cascades (Legacy/Manual)
-    - Recognition: FaceNet-inspired Grayscale Embeddings + Scikit-Learn Random Forest Classifier
-    - Training: Automated via Web UI or manual override via force_train.py
-- **Presentation Layer:** Flask Web Dashboard featuring a Glassmorphism UI and Admin Dataset Viewer
+    - Face Processing: Google MediaPipe (Real-time detection) + FaceNet embeddings
+    - Classification: Scikit-Learn Random Forest Classifier
+    - Database Sync: Dual-lookup logic mapping Student IDs to Physical Folders
+- **Presentation Layer:** Flask-based Glassmorphism UI providing a real-time monitor and Admin Directory
 
 ## ✨ Key Features
 
-- **High-Stability Capture:** Uses rpicam-vid raw byte-streaming to prevent camera hang issues on Pi 5
-- **Dynamic Admin Panel:** Automatically scans the dataset/ directory with high-resolution face crop viewing
-- **Glassmorphism UI:** Modernized translucent dashboard with real-time system status indicators
-- **Database-Level Duplicate Prevention:** MySQL UNIQUE index ensures one "Present" mark per student per day
-- **Dual Training Support:**
-    - `model.py`: High-accuracy MediaPipe training via Dashboard
-    - `force_train.py`: Robust manual training using Haar Cascades
+- **Dynamic Admin Directory:** Smart portal scanning MySQL database and `/dataset` folder for registered students
+- **Image Routing Bridge:** Custom Flask routes bypass local file system restrictions
+- **Hardened Duplicate Prevention:** MySQL UNIQUE composite key ensures students marked "Present" once per day
+- **Zero-Latency Dashboard:** Optimized YUV-to-BGR conversion reduces inference lag to under 0.2s per frame
 
-## 🔍 Stability Fixes & Lessons Learned
+## 📂 Project Structure
 
-### ✅ What Worked
-- **YUV Streaming:** Reduced capture latency from 2.5s to 0.2s
-- **Static Symlinking:** Efficient Flask image serving without data duplication
-- **Subprocess Cleanup:** Prevents zombie camera processes on startup
+Digital-Facial-Recognisation-Attendance-System/
+├── app.py                      # Flask & SQLAlchemy Configuration
+├── hardware.py                 # GPIO, Buzzer, and LCD controls
+├── model.py                    # AI/MediaPipe Face Recognition logic
+├── run_pi.py                   # Main Execution Loop (Camera + Server)
+├── schema.sql                  # MySQL Database Structure
+├── requirements-pi.txt         # Dependencies optimized for Pi 5
+├── README.md                   # System Documentation
+├── .gitignore                  # Git Exclusion rules (ignores venv/dataset)
+│
+├── static/                     # Web Assets (Public)
+│   ├── css/
+│   │   └── style.css           # Custom Glassmorphism styles
+│   ├── images/
+│   │   └── bg.png              # Dashboard background
+│   └── js/
+│       ├── dashboard.js        # Training & Chart logic
+│       ├── camera_add_student.js
+│       └── camera_mark.js      # Recognition view logic
+│
+├── templates/                  # HTML Views (Jinja2)
+│   ├── index.html              # Main Dashboard
+│   ├── admin_directory.html    # Student Selection Menu
+│   ├── admin_view.html         # Individual Dataset Viewer
+│   ├── add_student.html        # Enrollment Page
+│   ├── mark_attendance.html    # Live Scanning Page
+│   └── attendance_record.html  # SQL Record Viewer
+│
+└── tests & tools/              # Maintenance scripts
+    ├── manual_fix.py
+    └── test_db.py
 
-### ❌ Challenges Overcome
-- **V4L2 Interface:** Raw subprocess streaming is required for Pi 5 stability
-- **Thermal Management:** Active cooling fan needed to prevent throttling during AI inference
+## 🔍 Stability Fixes
 
-## 📦 Installation & Setup
+- Permission Bridge: Symbolic link for dataset access
+- Numerical Identity Mapping: Student ID-based directory system
+- Subprocess Lockdown: pkill cleanup sequence
 
-### 1. Environment Setup
+## 📦 Installation
 
 ```bash
 git clone https://github.com/your-username/Digital-Attendance-System.git
@@ -44,62 +66,13 @@ cd Digital-Attendance-System
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements-pi.txt
-```
-
-### 2. Static Bridge Setup
-
-```bash
 ln -s /home/pi/Digital-Attendance-System/dataset /home/pi/Digital-Attendance-System/static/dataset_link
-```
-
-### 3. Database Initialization
-
-```bash
 mysql -u your_user -p attendance_db < schema.sql
 ```
 
-## ⚙️ Running the System
+## ⚙️ Operating the System
 
-### Manual AI Training
+- **Main Dashboard:** `http://<your-pi-ip>:5000`
+- **Admin Directory:** `http://<your-pi-ip>:5000/admin/login` (Password: `admin123`)
 
-```bash
-python force_train.py
-```
-
-### Start Live System
-
-```bash
-python run_pi.py
-```
-
-### Access the System
-
-- **Dashboard:** `http://<your-pi-ip>:5000`
-- **Admin Panel:** `http://<your-pi-ip>:5000/admin/login` (Password: admin123)
-
-## 🗂️ Project Structure
-
-```
-├── run_pi.py         # Main execution loop
-├── force_train.py    # Manual training
-├── model.py          # AI inference & training
-├── app.py            # Flask & SQLAlchemy
-├── hardware.py       # GPIO controls
-├── dataset/          # Face images
-├── models/           # model.pkl
-├── templates/
-│   ├── index.html    # Dashboard
-│   └── admin_view.html
-└── static/
-        └── dataset_link  # Symbolic link
-```
-
-## 📄 Maintenance
-
-- **Laptop:** `git add .` → `git commit` → `git push origin main`
-- **Pi:** `git pull origin main`
-
-> **Note:** Optimized for BCM2712 (Pi 5). Running on standard laptop will fail.
-
-**Author:** Abhisam Sharma  
-**License:** MIT
+**Author:** Abhisam Sharma | **License:** MIT
