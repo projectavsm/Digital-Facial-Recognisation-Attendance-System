@@ -1,6 +1,6 @@
 /**
  * =========================================================
- * camera_mark.js - Attendance Marking Controller (Fixed)
+ * camera_mark.js - Attendance Marking Controller
  * =========================================================
  * PURPOSE:
  * 1. Display Pi's hardware camera feed in the browser
