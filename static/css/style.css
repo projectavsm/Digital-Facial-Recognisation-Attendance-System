@@ -1,155 +1,178 @@
-/* =========================
-   Global Styles
-   ========================= */
+/* =====================================================
+   1. GLOBAL STYLES & CORE LAYOUT
+   ===================================================== */
+:root {
+    --primary-blue: #3b82f6;
+    --dark-slate: #0f172a;
+    --glass-white: rgba(255, 255, 255, 0.94);
+}
+
 html, body {
-  height: 100%;
-  margin: 0;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: url('../images/bg.png') no-repeat center center fixed;
-  background-size: contain;
-  margin: 0;
-  color: #1e293b;
-  display: flex;                     /* right-side alignment */
-  justify-content: flex-end;
-  align-items: flex-start;
-  padding: 2rem;                      /* spacing around the panel */
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: var(--dark-slate) url('../images/bg.png') no-repeat center center fixed;
+    background-size: cover;
+    color: #1e293b;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centers everything horizontally */
+    min-height: 100vh;
+    box-sizing: border-box;
 }
 
-/* Optional overlay if background is busy */
-
- body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: rgba(255,255,255,0.4);
-  z-index: -1;
-} 
-
-h5, h4, h3 {
-  font-weight: 600;
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(3px);
+    z-index: -1;
 }
 
-/* =========================
-   Right Panel Wrapper
-   ========================= */
+.d-none { display: none !important; }
+
+/* =====================================================
+   2. MAIN CONTAINERS (THE FINAL FIX)
+   ===================================================== */
+
+/* This wrapper ensures content never gets too wide and stays centered */
+.container-fluid {
+    width: 100%;
+    max-width: 1300px;
+    padding: 2rem;
+    margin: 0 auto;
+}
+
+/* Use a Grid to handle Desktop (side-by-side) vs Mobile (stacked) */
+.dashboard-layout {
+    display: grid;
+    grid-template-columns: 1fr; /* Default: Stacked */
+    gap: 2rem;
+    width: 100%;
+}
+
+@media (min-width: 992px) {
+    .dashboard-layout {
+        grid-template-columns: 1.5fr 1fr; /* Desktop: Camera(Left) and Controls(Right) */
+        align-items: start;
+    }
+}
+
 .right-panel {
-  width: 420px;                       /* fixed column width */
-  max-width: 90vw;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 1rem;
-  padding: 2rem 1.5rem;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-  overflow-y: auto;                   /* scroll if content grows */
+    width: 100%;
+    background: var(--glass-white);
+    backdrop-filter: blur(10px);
+    border-radius: 1.25rem;
+    padding: 2rem 1.5rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
 }
 
-/* Keep Bootstrap rows/cards inside panel tidy */
-.right-panel .row {
-  margin: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;                         /* spacing between cards */
+.glass-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.2);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
 }
 
-.right-panel .col-lg-4,
-.right-panel .col-lg-8 {
-  flex: 0 0 auto;         /* stop Bootstrap from auto-stretching */
-  max-width: none;        /* remove the percentage width constraint */
+/* =====================================================
+   3. CAMERA & VIDEO BOXES (RESPONSIVE FIX)
+   ===================================================== */
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 800px; /* Bigger on desktop */
+    margin: 0 auto;
+    background: #000;
+    border-radius: 1.25rem;
+    overflow: hidden;
+    border: 4px solid var(--primary-blue);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
-/* =========================
-   Card Styles
-   ========================= */
-.card {
-  border: none;
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+#video, #markVideo {
+    width: 100%;
+    height: auto;
+    display: block; /* Ensure no gaps at bottom */
+    aspect-ratio: 4/3;
+    object-fit: cover;
 }
 
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+/* =====================================================
+   4. UI COMPONENTS
+   ===================================================== */
+.nav-gradient {
+    background: linear-gradient(135deg, #1e293b, #3b82f6);
+    color: white;
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 2rem;
+    width: 100%;
 }
 
-.card h5 {
-  color: #0f172a;
+.btn {
+    padding: 0.8rem 1.5rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
 }
 
-.card .btn {
-  border-radius: 0.6rem;
-  font-weight: 500;
-  transition: background-color 0.2s ease;
-}
-
-.card .btn-primary:hover,
-.card .btn-success:hover,
-.card .btn-warning:hover {
-  filter: brightness(0.95);
-}
-
-/* =========================
-   Progress Bar & Chart
-   ========================= */
 .progress {
-  background-color: #e2e8f0;
-  border-radius: 1rem;
+    height: 28px !important;
+    background-color: #e2e8f0;
+    border-radius: 50px;
+    margin: 15px 0;
 }
 
 .progress-bar {
-  background: linear-gradient(90deg, #3b82f6, #2563eb);
-  font-weight: 600;
-  border-radius: 1rem;
+    background: linear-gradient(90deg, #10b981, #34d399);
+    transition: width 0.5s cubic-bezier(0.15, 0, 0.2, 1);
 }
 
-#attendanceChart {
-  max-height: 320px;
+/* =====================================================
+   5. DATASET & LISTS
+   ===================================================== */
+.dataset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
 }
 
-/* =========================
-   Navbar & Utilities
-   ========================= */
-.navbar {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+.face-card {
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
 }
 
-.navbar-brand {
-  font-size: 1.4rem;
-  letter-spacing: 0.5px;
-}
-
-.btn-outline-light {
-  border-radius: 0.5rem;
-  transition: all 0.2s ease;
-}
-
-.btn-outline-light:hover {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-.text-muted {
-  color: #64748b !important;
-}
-
-.shadow-sm {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
-}
-
-/* =========================
-   Responsive
-   ========================= */
-@media (max-width: 768px) {
-  body {
-    justify-content: center;          /* center on small screens */
-    padding: 1rem;
-  }
-  .right-panel {
+.face-card img {
     width: 100%;
-    max-width: 500px;
-  }
+    aspect-ratio: 1/1;
+    object-fit: cover;
+}
+
+/* =====================================================
+   6. FINAL MOBILE OPTIMIZATION
+   ===================================================== */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding: 1rem;
+    }
+    
+    .nav-gradient {
+        text-align: center;
+    }
+
+    .right-panel {
+        padding: 1.5rem 1rem;
+    }
 }

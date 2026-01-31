@@ -165,6 +165,13 @@ function startResultPolling() {
     }, 500); // Poll every 500ms
 }
 
+function stopStream() {
+    markVideo.src = ""; // Clear the MJPEG stream
+    // If using WebRTC/Browser Camera (Navigator):
+    // stream.getTracks().forEach(track => track.stop()); 
+}
+
+
 // =========================================================
 // RESULT HANDLING
 // =========================================================

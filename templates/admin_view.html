@@ -7,84 +7,16 @@
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
     
-    <style>
-        /* 1. Global Reset & Body Styling */
-        body { 
-            background-color: #f4f7f6; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 0;
-            padding-bottom: 50px;
-        }
-
-        /* 2. Admin Header - Gradient background to signify secure area */
-        .header { 
-            background: linear-gradient(90deg, #1e293b, #3b82f6); 
-            color: white; 
-            padding: 25px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        /* 3. Dataset Grid Layout - Auto-responsive columns */
-        .dataset-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
-            gap: 20px; 
-            padding: 30px; 
-        }
-
-        /* 4. Facial Image Cards */
-        .face-card {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            border: 1px solid #e0e0e0;
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-
-        .face-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 20px rgba(0,0,0,0.15);
-            border-color: #3b82f6;
-        }
-
-        /* 5. Image Scaling - Ensures face is centered */
-        .face-card img { 
-            width: 100%; 
-            height: 160px; 
-            object-fit: cover; 
-            border-bottom: 1px solid #eee;
-        }
-
-        /* 6. Label Styling for filenames */
-        .img-label {
-            font-size: 10px;
-            font-weight: 600;
-            color: #6c757d;
-            padding: 8px;
-            background: #fafafa;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .stats-badge {
-            background: rgba(255,255,255,0.2);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
 
-    <div class="header d-flex justify-content-between align-items-center">
+    <div class="header-admin d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="mb-0 fw-bold">Student Dataset Viewer</h2>
+            <h2 class="mb-0 fw-bold text-white">Student Dataset Viewer</h2>
             <div class="d-flex align-items-center mt-1">
-                <span class="stats-badge me-3">Name: <strong>{{ student_name }}</strong></span>
-                <span class="stats-badge">ID: <code>{{ student_id }}</code></span>
+                <span class="stats-badge me-3 text-white">Name: <strong>{{ student_name }}</strong></span>
+                <span class="stats-badge text-white">ID: <code>{{ student_id }}</code></span>
             </div>
         </div>
         <div>
