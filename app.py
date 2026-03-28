@@ -141,15 +141,7 @@ def add_student():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # --- ADD THIS MISSING ROUTE ---
-@app.route("/trigger_capture")
-def trigger_capture():
-    """Tells the JS that the backend is ready to receive images"""
-    sid = request.args.get("student_id")
-    if not sid:
-        return jsonify({"status": "error", "message": "No ID provided"}), 400
-    
-    # In a Pi 5 setup, this usually just confirms the ID exists
-    return jsonify({"status": "capturing", "student_id": sid})
+
 
 @app.route("/upload_face", methods=["POST"])
 def upload_face():
