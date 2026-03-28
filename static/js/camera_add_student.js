@@ -72,19 +72,23 @@ saveInfoBtn.addEventListener("click", async () => {
 startCaptureBtn.addEventListener("click", async () => {
     if (!student_id) return;
     
-    // 1. UI Updates
+    // 1. Force UI hide/show using the exact IDs from your HTML
+    const placeholder = document.getElementById("cameraPlaceholder");
+    const videoSection = document.getElementById("videoSection");
+    
+    if (placeholder) placeholder.style.setProperty("display", "none", "important");
+    if (videoSection) videoSection.style.setProperty("display", "block", "important");
+
+    // 2. UI Status Update
     startCaptureBtn.disabled = true;
     captureStatus.innerText = "Connecting to Pi Camera...";
     
-    // 2. SHOW THE CAMERA SECTION (Add these lines here)
-    document.getElementById('cameraPlaceholder').style.display = 'none';
-    document.getElementById('videoSection').style.display = 'block';
-    
     try {
-        // 3. Start the Video Feed with a timestamp to prevent caching
+        // 3. Start the Video Feed (Using the 'videoFeed' constant from top of script)
+        // Adding the timestamp prevents the browser from showing a cached 'broken' image
         videoFeed.src = "/video_feed?t=" + new Date().getTime();
         
-        // 4. Tell the backend to start capturing images
+        // 4. Trigger the Pi to start saving the 50 images
         const res = await fetch(`/trigger_capture?student_id=${student_id}`);
         const data = await res.json();
         
@@ -95,9 +99,12 @@ startCaptureBtn.addEventListener("click", async () => {
         console.error("Camera Error:", err);
         alert("Camera Error: " + err.message);
         startCaptureBtn.disabled = false;
+        
+        // Reset UI on error so user can try again
+        if (placeholder) placeholder.style.display = "block";
+        if (videoSection) videoSection.style.display = "none";
     }
 });
-
 function handleEnrollmentUI() {
     let timeLeft = 10;
     const alignTimer = setInterval(() => {
