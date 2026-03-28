@@ -66,16 +66,25 @@ saveInfoBtn.addEventListener("click", async () => {
 // =========================================================
 // STEP 2: CAPTURE
 // =========================================================
+// =========================================================
+// STEP 2: CAPTURE
+// =========================================================
 startCaptureBtn.addEventListener("click", async () => {
     if (!student_id) return;
+    
+    // 1. UI Updates
     startCaptureBtn.disabled = true;
     captureStatus.innerText = "Connecting to Pi Camera...";
     
+    // 2. SHOW THE CAMERA SECTION (Add these lines here)
+    document.getElementById('cameraPlaceholder').style.display = 'none';
+    document.getElementById('videoSection').style.display = 'block';
+    
     try {
-        cameraPlaceholder.style.display = "none";
-        videoFeed.src = "/video_feed";
-        videoFeed.style.display = "block";
+        // 3. Start the Video Feed with a timestamp to prevent caching
+        videoFeed.src = "/video_feed?t=" + new Date().getTime();
         
+        // 4. Tell the backend to start capturing images
         const res = await fetch(`/trigger_capture?student_id=${student_id}`);
         const data = await res.json();
         
@@ -83,6 +92,7 @@ startCaptureBtn.addEventListener("click", async () => {
             handleEnrollmentUI();
         }
     } catch (err) {
+        console.error("Camera Error:", err);
         alert("Camera Error: " + err.message);
         startCaptureBtn.disabled = false;
     }

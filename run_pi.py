@@ -71,8 +71,22 @@ def generate_frames():
 
 @app.route('/video_feed')
 def video_feed():
-    """Serves the live Pi camera feed to <img> tags in HTML."""
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    """Serves the live Pi camera feed with better error handling."""
+    def stream():
+        global latest_frame
+        while running:
+            if latest_frame is not None:
+                try:
+                    ret, buffer = cv2.imencode('.jpg', latest_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    if ret:
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                except Exception as e:
+                    print(f"Streaming error: {e}")
+                    break
+            time.sleep(0.1) # Limit to 10FPS to save bandwidth over the tunnel
+            
+    return Response(stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # =========================================================
 # WEB ROUTES: ATTENDANCE MARKING (Hardware Trigger)
