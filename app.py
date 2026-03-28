@@ -108,23 +108,48 @@ def attendance_stats():
 # STUDENT ENROLLMENT
 # ---------------------------------------------------------
 
+# --- Updated Enrollment Route ---
 @app.route("/enrollment", methods=["GET", "POST"])
 def add_student():
     if request.method == "GET":
         return render_template("add_student.html")
 
     name = request.form.get("name", "").strip()
+    s_class = request.form.get("class", "").strip()
+    s_section = request.form.get("section", "").strip()
+    
     if not name:
-        return jsonify({"error": "Name required"}), 400
+        return jsonify({"status": "error", "message": "Name required"}), 400
 
+    # Generate Unique ID
     student_id = f"S{int(datetime.datetime.utcnow().timestamp() * 1000)}"
-    db.session.execute(
-        text("INSERT INTO users (user_id, name, role, created_at) VALUES (:id, :name, 'student', NOW())"),
-        {"id": student_id, "name": name}
-    )
-    db.session.commit()
-    os.makedirs(os.path.join(DATASET_DIR, student_id), exist_ok=True)
-    return jsonify({"student_id": student_id})
+    
+    try:
+        db.session.execute(
+            text("INSERT INTO users (user_id, name, class, section, role, created_at) "
+                 "VALUES (:id, :name, :cls, :sec, 'student', NOW())"),
+            {"id": student_id, "name": name, "cls": s_class, "sec": s_section}
+        )
+        db.session.commit()
+        
+        # Create folder for images
+        os.makedirs(os.path.join(DATASET_DIR, student_id), exist_ok=True)
+        
+        return jsonify({"status": "success", "student_id": student_id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# --- ADD THIS MISSING ROUTE ---
+@app.route("/trigger_capture")
+def trigger_capture():
+    """Tells the JS that the backend is ready to receive images"""
+    sid = request.args.get("student_id")
+    if not sid:
+        return jsonify({"status": "error", "message": "No ID provided"}), 400
+    
+    # In a Pi 5 setup, this usually just confirms the ID exists
+    return jsonify({"status": "capturing", "student_id": sid})
 
 @app.route("/upload_face", methods=["POST"])
 def upload_face():

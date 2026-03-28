@@ -3,120 +3,92 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Mark Attendance | Pi Face AI</title>
-  
+  <title>Enroll New Student | Pi Face AI</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
-  
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-
 <body class="bg-light">
 
 <div class="container my-5">
   <div class="card p-4 border-0 shadow-lg" style="border-radius: 15px;">
     
-    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
-      <div>
-        <h2 class="text-primary mb-0">
-          <i class="bi bi-camera-video-fill me-2"></i>
-          Attendance Station
-        </h2>
-        <p class="text-muted small mb-0">
-          <i class="bi bi-cpu-fill me-1"></i>
-          Powered by Raspberry Pi 5 & MediaPipe AI
-        </p>
-      </div>
-      
-      <div class="btn-group" role="group">
-        <button id="startMarkBtn" class="btn btn-lg btn-success px-4">
-          <i class="bi bi-play-circle-fill me-2"></i>
-          Start Scan
-        </button>
-        <button id="stopMarkBtn" class="btn btn-lg btn-outline-danger px-4" disabled>
-          <i class="bi bi-stop-circle-fill me-2"></i>
-          Stop
-        </button>
-      </div>
+    <div class="mb-4 border-bottom pb-3">
+      <h2 class="text-primary mb-0"><i class="bi bi-person-plus-fill me-2"></i>Student Enrollment</h2>
+      <p class="text-muted small mb-0">Step 1: Save Info → Step 2: Capture Face</p>
     </div>
-    
+
     <div class="row">
-      
-      <div class="col-lg-7 text-center">
-        <div class="video-wrapper mx-auto">
-          <div class="video-placeholder" id="videoPlaceholder">
-            <i class="bi bi-camera-video"></i>
-            <p class="fw-bold">Camera Feed Waiting...</p>
-            <small class="text-muted">Click "Start Scan" to begin</small>
-          </div>
-          
-          <img id="markVideo" src="" alt="Pi Camera Feed" style="display: none; width: 100%; max-width: 640px;">
-          
-          <div id="countdownOverlay" class="countdown-overlay" style="display: none;">10</div>
-        </div>
-        
-        <div id="markStatus" class="mt-3 fs-5 fw-bold text-secondary p-3 bg-light border rounded">
-          <i class="bi bi-info-circle-fill me-2"></i>
-          System Idle: Click Start to Begin
-        </div>
-      </div>
-      
       <div class="col-lg-5">
-        <div class="card bg-white border-0 shadow-sm">
-          
-          <div class="card-header bg-primary text-white fw-bold">
-            <i class="bi bi-people-fill me-2"></i>
-            Recognized This Session
+        <div class="card border-0 bg-white shadow-sm p-3">
+          <h5 class="fw-bold mb-3">Step 1: Student Information</h5>
+          <form id="studentForm">
+            <div class="mb-3">
+              <label class="form-label small fw-bold">Full Name *</label>
+              <input type="text" name="name" class="form-control" placeholder="Enter student name" required>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label small fw-bold">Class</label>
+                    <input type="text" name="class" class="form-control" placeholder="e.g. 10">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label small fw-bold">Section</label>
+                    <input type="text" name="section" class="form-control" placeholder="e.g. A">
+                </div>
+            </div>
+            <button type="button" id="saveInfoBtn" class="btn btn-primary w-100 py-2">
+              <i class="bi bi-check-circle me-1"></i> Save & Open Camera
+            </button>
+          </form>
+        </div>
+
+        <div class="card mt-3 border-0 bg-info bg-opacity-10">
+          <div class="card-body small">
+            <i class="bi bi-info-circle-fill me-1"></i> 
+            After saving, the Pi 5 camera will capture 50 photos to create the AI model.
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div class="card border-0 bg-dark p-2 text-center" style="min-height: 350px;">
+          <div id="cameraPlaceholder" class="text-white d-flex flex-column justify-content-center" style="height: 350px;">
+             <i class="bi bi-camera-video-off fs-1 opacity-50"></i>
+             <p class="mt-2">Camera locked until info is saved</p>
           </div>
           
-          <ul id="recognizedList" class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
-            <li class="list-group-item">
-              <div class="text-center py-4 text-muted">
-                <i class="bi bi-person-check fs-1 opacity-25"></i>
-                <p class="mb-0">No students recognized yet</p>
+          <div id="videoSection" style="display: none;">
+              <img id="video" src="" class="img-fluid rounded border border-secondary" alt="Capture Feed">
+              <div class="progress mt-2" style="height: 10px;">
+                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%"></div>
               </div>
-            </li>
-          </ul>
-        </div>
-        
-        <div class="card mt-3 bg-light border-0">
-          <div class="card-body">
-            <h6 class="fw-bold text-secondary mb-2">
-              <i class="bi bi-lightbulb-fill me-1"></i>
-              How to Use
-            </h6>
-            <ol class="small mb-0 ps-3">
-              <li>Click <strong>"Start Scan"</strong> to activate the camera</li>
-              <li>Position your face in the center of the frame</li>
-              <li>Wait for the 10-second countdown to complete</li>
-              <li>Stay still during the AI scan</li>
-              <li>Check the LCD screen for instant feedback</li>
-            </ol>
           </div>
         </div>
+
+        <div id="captureStatus" class="mt-3 p-3 bg-white border rounded text-center fw-bold text-muted">
+          Waiting for Information...
+        </div>
+
+        <div class="mt-3 d-flex gap-2">
+            <button id="startCaptureBtn" class="btn btn-success flex-grow-1 py-2" disabled>
+                <i class="bi bi-camera-fill me-1"></i> Start Face Scan
+            </button>
+            <button id="addStudentBtn" class="btn btn-outline-primary py-2" disabled>
+                Done
+            </button>
+        </div>
       </div>
-      
     </div>
-    
-    <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
-      <a href="/" class="text-decoration-none text-secondary btn btn-sm btn-outline-light text-dark">
-        <i class="bi bi-arrow-left-circle-fill me-1"></i>
-        Return to Dashboard
+
+    <div class="mt-4 pt-3 border-top">
+      <a href="/" class="btn btn-sm btn-link text-decoration-none text-secondary">
+        <i class="bi bi-arrow-left"></i> Cancel and Return
       </a>
-      
-      <div class="text-muted small">
-        <i class="bi bi-shield-check me-1"></i>
-        Secure AI Recognition | Confidence: 35%
-      </div>
     </div>
-    
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/camera_mark.js') }}"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
-
+<script src="{{ url_for('static', filename='js/camera_add_student.js') }}"></script>
 </body>
 </html>

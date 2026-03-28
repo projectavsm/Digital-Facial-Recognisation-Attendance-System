@@ -101,17 +101,39 @@ function handleEnrollmentUI() {
     }, 1000);
 }
 
-function startCapturePhase() {
+async function startCapturePhase() {
     captureStatus.innerText = "📸 Capturing 50 Images... Rotate head slowly!";
-    let progress = 0;
-    const captureInterval = setInterval(() => {
-        progress += 5; 
-        progressBar.style.width = `${50 + (progress / 2)}%`;
-        if (progress >= 100) {
+    let count = 0;
+    const total = 50;
+
+    const captureInterval = setInterval(async () => {
+        count++;
+        
+        // 1. Draw current video frame to a hidden canvas
+        const canvas = document.createElement("canvas");
+        canvas.width = videoFeed.videoWidth || 640;
+        canvas.height = videoFeed.videoHeight || 480;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(videoFeed, 0, 0);
+
+        // 2. Convert to Blob and upload
+        canvas.toBlob(async (blob) => {
+            const formData = new FormData();
+            formData.append("student_id", student_id);
+            formData.append("images[]", blob, `cap_${count}.jpg`);
+
+            await fetch("/upload_face", { method: "POST", body: formData });
+        }, "image/jpeg");
+
+        // 3. Update Progress
+        let progressPercent = 50 + ((count / total) * 50);
+        progressBar.style.width = `${progressPercent}%`;
+
+        if (count >= total) {
             clearInterval(captureInterval);
             finishEnrollment();
         }
-    }, 200);
+    }, 200); // Takes 5 photos per second
 }
 
 function finishEnrollment() {
