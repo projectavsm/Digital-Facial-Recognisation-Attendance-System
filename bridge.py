@@ -38,7 +38,7 @@ def start_bridge():
     print("🚀 Starting Cloudflare Tunnel...")
     # We use stderr=subprocess.STDOUT because cloudflared logs to stderr
     proc = subprocess.Popen(
-        ['cloudflared', 'tunnel', '--url', 'http://localhost:5000'], 
+        ['cloudflared', 'tunnel', 'run', '9be76f8f-dc1a-4c26-8d77-5b8ac8febbc3'], 
         stdout=subprocess.PIPE, 
         stderr=subprocess.STDOUT, 
         text=True

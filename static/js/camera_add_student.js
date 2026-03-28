@@ -34,7 +34,7 @@ saveInfoBtn.addEventListener("click", async () => {
     const formData = new FormData(studentForm);
     
     try {
-        const res = await fetch("/add_student_pi", {
+        const res = await fetch("/enrollment", {
             method: "POST",
             body: formData
         });
