@@ -72,23 +72,30 @@ saveInfoBtn.addEventListener("click", async () => {
 startCaptureBtn.addEventListener("click", async () => {
     if (!student_id) return;
     
-    // 1. Force UI hide/show using the exact IDs from your HTML
-    const placeholder = document.getElementById("cameraPlaceholder");
-    const videoSection = document.getElementById("videoSection");
-    
-    if (placeholder) placeholder.style.setProperty("display", "none", "important");
-    if (videoSection) videoSection.style.setProperty("display", "block", "important");
+    const placeholder = document.getElementById('cameraPlaceholder');
+    const videoSection = document.getElementById('videoSection');
+    const videoImg = document.getElementById('video');
 
-    // 2. UI Status Update
+    // 1. FORCE THE SWAP
+    if (placeholder) {
+        placeholder.classList.add('d-none'); // Uses your CSS !important rule
+        placeholder.style.display = 'none';  // Double insurance
+    }
+    
+    if (videoSection) {
+        videoSection.classList.remove('d-none');
+        videoSection.style.display = 'block';
+    }
+
     startCaptureBtn.disabled = true;
     captureStatus.innerText = "Connecting to Pi Camera...";
     
     try {
-        // 3. Start the Video Feed (Using the 'videoFeed' constant from top of script)
-        // Adding the timestamp prevents the browser from showing a cached 'broken' image
-        videoFeed.src = "/video_feed?t=" + new Date().getTime();
+        // 2. Start the Video Feed
+        if (videoImg) {
+            videoImg.src = "/video_feed?t=" + new Date().getTime();
+        }
         
-        // 4. Trigger the Pi to start saving the 50 images
         const res = await fetch(`/trigger_capture?student_id=${student_id}`);
         const data = await res.json();
         
@@ -96,13 +103,10 @@ startCaptureBtn.addEventListener("click", async () => {
             handleEnrollmentUI();
         }
     } catch (err) {
-        console.error("Camera Error:", err);
         alert("Camera Error: " + err.message);
         startCaptureBtn.disabled = false;
-        
-        // Reset UI on error so user can try again
-        if (placeholder) placeholder.style.display = "block";
-        if (videoSection) videoSection.style.display = "none";
+        // Re-show placeholder on error
+        placeholder.classList.remove('d-none');
     }
 });
 function handleEnrollmentUI() {
