@@ -160,7 +160,7 @@ def upload_face():
 # AI TRAINING
 # ---------------------------------------------------------
 
-@app.route("/train_model")
+@app.route("/train_model", methods=["GET", "POST"])
 def train_model_route():
     status = read_train_status()
     if status["running"]:
