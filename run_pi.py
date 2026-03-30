@@ -25,11 +25,11 @@ def video_feed():
             time.sleep(0.1)
     return Response(stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@app.route('/trigger_attendance')
+@app.route('/trigger_capture')
 def trigger_attendance():
     global system_state
     system_state = "ALIGNING"
-    threading.Timer(10.0, lambda: globals().update(system_state="SCANNING")).start()
+    threading.Timer(3.0, lambda: globals().update(system_state="SCANNING")).start()
     return jsonify({"status": "aligning"})
 
 def camera_loop():
