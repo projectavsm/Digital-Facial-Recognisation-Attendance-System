@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 import pickle
 from sklearn.ensemble import RandomForestClassifier
+import mlflow
+from sklearn.metrics import accuracy_score
 
 # -------------------------------
 # Paths and constants
@@ -160,6 +162,18 @@ def train_model_background(dataset_dir, progress_callback=None):
         progress_callback(85, "Training RandomForest classifier...")
     clf = RandomForestClassifier(n_estimators=150, n_jobs=-1, random_state=42)
     clf.fit(X, y)
+
+    # --- NEW: MLFLOW METRICS LOGGING ---
+    # We check how many of the training images the model can correctly identify
+    predictions = clf.predict(X)
+    train_acc = accuracy_score(y, predictions)
+    
+    # Check if an MLflow run is active (started by manual_fix.py)
+    if mlflow.active_run():
+        mlflow.log_metric("train_accuracy", float(train_acc))
+        mlflow.log_param("n_estimators", 150)
+        print(f"\n📊 MLflow Metric: Training Accuracy = {train_acc:.2%}")
+    # -----------------------------------
 
     # Save model
     with open(MODEL_PATH, "wb") as f:
