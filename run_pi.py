@@ -60,22 +60,27 @@ def camera_loop():
                 app.enroll_id = None # Reset
             else:
                 # ATTENDANCE MODE: Recognition logic (your existing code)
-                results = mp_face.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                if results.detections and clf:
-                    emb = crop_face_and_embed(frame, results.detections[0])
-                    if emb is not None:
-                        sid, conf = predict_with_model(clf, emb)
-                        if conf > 0.5:
-                            with app.app_context():
-                                name = db.session.execute(text("SELECT name FROM users WHERE user_id=:s"),{"s":sid}).scalar()
-                                exists = db.session.execute(text("SELECT 1 FROM attendance WHERE student_id=:s AND DATE(timestamp)=CURDATE()"),{"s":sid}).fetchone()
-                                if not exists:
-                                    db.session.execute(text("INSERT INTO attendance (student_id,class_id,timestamp,status) VALUES (:s,1,NOW(),'present')"),{"s":sid})
-                                    db.session.commit()
-                                    attendance_success(name, conf)
-                                else: attendance_duplicate(name)
-                        else: attendance_unknown()
-                else: attendance_unknown()
+                if system_state == "SCANNING":
+                    # Only do recognition if we are actually in scanning mode
+                    results = mp_face.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    if results.detections and clf:
+                        emb = crop_face_and_embed(frame, results.detections[0])
+                        if emb is not None:
+                            sid, conf = predict_with_model(clf, emb)
+                            if conf > 0.5:
+                                with app.app_context():
+                                    name = db.session.execute(text("SELECT name FROM users WHERE user_id=:s"),{"s":sid}).scalar()
+                                    exists = db.session.execute(text("SELECT 1 FROM attendance WHERE student_id=:s AND DATE(timestamp)=CURDATE()"),{"s":sid}).fetchone()
+                                    if not exists:
+                                        db.session.execute(text("INSERT INTO attendance (student_id,class_id,timestamp,status) VALUES (:s,1,NOW(),'present')"),{"s":sid})
+                                        db.session.commit()
+                                        attendance_success(name, conf)
+                                    else: attendance_duplicate(name)
+                            else: attendance_unknown()
+                    else: attendance_unknown()
+                else:
+                    # Just show the video feed, don't trigger buzzers
+                    pass
             system_state = "IDLE"
 
 if __name__ == "__main__":
