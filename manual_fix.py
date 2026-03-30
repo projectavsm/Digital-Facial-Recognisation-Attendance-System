@@ -2,45 +2,65 @@ import os
 import numpy as np
 import pickle
 import sys
+import datetime
+import mlflow
+import mlflow.sklearn
 from model import train_model_background
 
+# 1. MLflow Configuration (Matched to your PuTTY port 5050)
+mlflow.set_tracking_uri("http://localhost:5050") 
+mlflow.set_experiment("Pi_Attendance_System") 
+
 def progress(pct, msg):
-    """
-    Callback function to show training progress in the terminal.
-    """
     sys.stdout.write(f"\r[TRAINING] {pct}% - {msg}...")
     sys.stdout.flush()
 
 def run_manual_fix():
     dataset_dir = 'dataset'
 
-    # 1. Validation: Ensure dataset exists and isn't empty
     if not os.path.exists(dataset_dir):
         print(f"❌ Error: The folder '{dataset_dir}' does not exist.")
         return
 
-    # Count subdirectories (students)
     student_folders = [f for f in os.listdir(dataset_dir) if os.path.isdir(os.path.join(dataset_dir, f))]
     
     if len(student_folders) == 0:
-        print("❌ Error: No student folders found in 'dataset/'. Cannot train on empty data.")
+        print("❌ Error: No student folders found.")
         return
 
-    print(f"✅ Found {len(student_folders)} student(s): {', '.join(student_folders)}")
-    print("🚀 Starting AI Model Retraining (this may take a few minutes)...")
+    # Metadata for MLflow
+    total_images = sum([len(os.listdir(os.path.join(dataset_dir, f))) for f in student_folders])
+
+    print(f"✅ Found {len(student_folders)} student(s) | {total_images} total images.")
+    print("🚀 Starting AI Model Retraining with MLflow Tracking...")
     print("-" * 50)
 
-    try:
-        # 2. Trigger the training logic from model.py
-        # This will regenerate embeddings.pickle and le.pickle
-        train_model_background(dataset_dir, progress_callback=progress)
+    # 2. THE MLFLOW "RECORD" BLOCK
+    # This creates a unique entry in your dashboard
+    with mlflow.start_run(run_name=f"Manual_Fix_{datetime.datetime.now().strftime('%H:%M:%S')}"):
         
-        print("\n" + "-" * 50)
-        print("✨ SUCCESS: AI Model has been updated with new student data.")
-        print("👉 Action: You may now restart 'run_pi.py' to begin recognition.")
-        
-    except Exception as e:
-        print(f"\n❌ Training Failed: {str(e)}")
+        # Log the "Ingredients" (Parameters)
+        mlflow.log_param("student_count", len(student_folders))
+        mlflow.log_param("image_count", total_images)
+        mlflow.set_tag("trained_by", "manual_script")
+
+        try:
+            # 3. Trigger the training
+            train_model_background(dataset_dir, progress_callback=progress)
+            
+            # 4. Log the "Result" (Artifacts)
+            # This saves a copy of the model inside MLflow so you can't lose it
+            if os.path.exists("model.pkl"):
+                mlflow.log_artifact("model.pkl")
+            if os.path.exists("le.pickle"):
+                mlflow.log_artifact("le.pickle")
+            
+            print("\n" + "-" * 50)
+            print("✨ SUCCESS: AI Model updated and logged to http://localhost:5050")
+            
+        except Exception as e:
+            mlflow.log_param("error", str(e))
+            print(f"\n❌ Training Failed: {str(e)}")
 
 if __name__ == "__main__":
     run_manual_fix()
