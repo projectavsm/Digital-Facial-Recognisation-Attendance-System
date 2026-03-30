@@ -4,6 +4,7 @@ from app import app, db
 from hardware import attendance_success, attendance_duplicate, attendance_unknown, system_message, cleanup
 from model import load_model_if_exists, predict_with_model, crop_face_and_embed
 
+DATASET_DIR = "dataset"
 latest_frame = None
 system_state = "IDLE" # IDLE, ALIGNING, SCANNING
 
@@ -26,11 +27,15 @@ def video_feed():
     return Response(stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/trigger_capture')
-def trigger_attendance():
+def trigger_capture():
     global system_state
-    system_state = "ALIGNING"
-    threading.Timer(3.0, lambda: globals().update(system_state="SCANNING")).start()
-    return jsonify({"status": "aligning"})
+    app.enroll_id = request.args.get('student_id') # Store the ID for the camera loop
+    system_state = "SCANNING"
+    return jsonify({"status": "capturing"})
+
+@app.route('/trigger_attendance')
+def trigger_attendance_alias():
+    return trigger_capture() # Just calls the same function
 
 def camera_loop():
     global latest_frame, system_state
@@ -44,22 +49,33 @@ def camera_loop():
         latest_frame = frame.copy()
 
         if system_state == "SCANNING":
-            results = mp_face.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            if results.detections and clf:
-                emb = crop_face_and_embed(frame, results.detections[0])
-                if emb is not None:
-                    sid, conf = predict_with_model(clf, emb)
-                    if conf > 0.5:
-                        with app.app_context():
-                            name = db.session.execute(text("SELECT name FROM users WHERE user_id=:s"),{"s":sid}).scalar()
-                            exists = db.session.execute(text("SELECT 1 FROM attendance WHERE student_id=:s AND DATE(timestamp)=CURDATE()"),{"s":sid}).fetchone()
-                            if not exists:
-                                db.session.execute(text("INSERT INTO attendance (student_id,class_id,timestamp,status) VALUES (:s,1,NOW(),'present')"),{"s":sid})
-                                db.session.commit()
-                                attendance_success(name, conf)
-                            else: attendance_duplicate(name)
-                    else: attendance_unknown()
-            else: attendance_unknown()
+            # Check if this is an ENROLLMENT capture (look for a student_id from a global variable)
+            current_enrollment_id = getattr(app, 'enroll_id', None)
+            
+            if current_enrollment_id:
+                # SAVE MODE: Save the photo to the dataset folder
+                img_path = os.path.join(DATASET_DIR, current_enrollment_id, f"{int(time.time())}.jpg")
+                cv2.imwrite(img_path, frame)
+                system_message("Photo Captured", "Saved!")
+                app.enroll_id = None # Reset
+            else:
+                # ATTENDANCE MODE: Recognition logic (your existing code)
+                results = mp_face.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                if results.detections and clf:
+                    emb = crop_face_and_embed(frame, results.detections[0])
+                    if emb is not None:
+                        sid, conf = predict_with_model(clf, emb)
+                        if conf > 0.5:
+                            with app.app_context():
+                                name = db.session.execute(text("SELECT name FROM users WHERE user_id=:s"),{"s":sid}).scalar()
+                                exists = db.session.execute(text("SELECT 1 FROM attendance WHERE student_id=:s AND DATE(timestamp)=CURDATE()"),{"s":sid}).fetchone()
+                                if not exists:
+                                    db.session.execute(text("INSERT INTO attendance (student_id,class_id,timestamp,status) VALUES (:s,1,NOW(),'present')"),{"s":sid})
+                                    db.session.commit()
+                                    attendance_success(name, conf)
+                                else: attendance_duplicate(name)
+                        else: attendance_unknown()
+                else: attendance_unknown()
             system_state = "IDLE"
 
 if __name__ == "__main__":

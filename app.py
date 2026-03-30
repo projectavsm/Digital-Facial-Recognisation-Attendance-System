@@ -98,6 +98,13 @@ def attendance_record():
     """)).fetchall()
     return render_template("attendance_record.html", records=records)
 
+@app.route("/admin/view_student/<student_id>")
+def admin_view_student(student_id):
+    if not session.get('admin_logged_in'): return redirect(url_for('admin_login'))
+    student = db.session.execute(text("SELECT * FROM users WHERE user_id = :id"), {"id": student_id}).fetchone()
+    attendance = db.session.execute(text("SELECT timestamp FROM attendance WHERE student_id = :id ORDER BY timestamp DESC"), {"id": student_id}).fetchall()
+    return render_template("view_student.html", student=student, attendance=attendance)
+
 @app.route("/admin/directory")
 def admin_directory():
     if not session.get('admin_logged_in'): return redirect(url_for('admin_login'))
