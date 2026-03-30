@@ -298,10 +298,18 @@ def perform_recognition(frame, mp_face, clf):
 
     user_id, confidence = predict_with_model(clf, embedding)
     
-    if confidence > 0.25:
+    # --- CRITICAL CHANGE HERE ---
+    # Increase threshold from 0.25 to 0.80
+    if confidence > 0.80: 
         process_attendance(user_id, confidence)
+        log_event("SUCCESS", f"Identified {user_id} with {confidence:.2%} confidence")
     else:
-        last_recognition_result = {"status": "failure", "message": "Low confidence"}
+        # This prevents the "Wrong Person" bug by rejecting weak matches
+        last_recognition_result = {
+            "status": "failure", 
+            "message": f"Low Confidence ({confidence:.2%})"
+        }
+        log_event("REJECTED", f"Weak match for {user_id} ({confidence:.2%})")
         attendance_unknown()
 
 def process_attendance(user_id, confidence):
