@@ -100,32 +100,6 @@ def attendance_record():
 
 @app.route("/admin/view_student/<student_id>")
 def admin_view_student(student_id):
-    if not session.get('admin_logged_in'): return redirect(url_for('admin_login'))
-    student = db.session.execute(text("SELECT * FROM users WHERE user_id = :id"), {"id": student_id}).fetchone()
-    attendance = db.session.execute(text("SELECT timestamp FROM attendance WHERE student_id = :id ORDER BY timestamp DESC"), {"id": student_id}).fetchall()
-    return render_template("view_student.html", student=student, attendance=attendance)
-
-# Change the function name to match what url_for expects
-@app.route("/admin/delete/<student_id>", methods=["POST"])
-def delete_student(student_id): # Ensure this name matches the HTML url_for
-    if not session.get('admin_logged_in'):
-        return jsonify({"error": "Unauthorized"}), 401
-    try:
-        db.session.execute(text("DELETE FROM attendance WHERE student_id = :sid"), {"sid": student_id})
-        db.session.execute(text("DELETE FROM users WHERE user_id = :sid"), {"sid": student_id})
-        db.session.commit()
-        
-        folder_path = os.path.join(DATASET_DIR, student_id)
-        if os.path.exists(folder_path):
-            shutil.rmtree(folder_path)
-        return redirect(url_for('admin_directory'))
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-# Also ensure this view route exists for the 'View' button in the directory
-@app.route("/admin/view_student/<student_id>")
-def admin_view_student(student_id):
     if not session.get('admin_logged_in'):
         return redirect(url_for('admin_login'))
     
@@ -135,6 +109,8 @@ def admin_view_student(student_id):
 
     folder_path = os.path.join(DATASET_DIR, student_id)
     images = [f for f in os.listdir(folder_path) if f.lower().endswith(('.jpg', '.png'))] if os.path.exists(folder_path) else []
+    
+    # This template name must match your actual .html file name (admin_view.html or view_student.html)
     return render_template("admin_view.html", student_id=student_id, student_name=res[0], images=sorted(images))
 
 # Add this to app.py to stop the 404 when clicking 'Train'
@@ -142,6 +118,23 @@ def admin_view_student(student_id):
 def train_model_api():
     # This matches the JS call that was 404-ing
     return train_model_route()
+
+@app.route("/upload_face", methods=["POST"])
+def upload_face():
+    student_id = request.form.get("student_id")
+    files = request.files.getlist("images[]")
+    if not student_id:
+        return jsonify({"error": "No student ID"}), 400
+        
+    folder = os.path.join(DATASET_DIR, student_id)
+    os.makedirs(folder, exist_ok=True)
+    
+    saved = 0
+    for f in files:
+        filename = f"{int(time.time() * 1000)}.jpg"
+        f.save(os.path.join(folder, filename))
+        saved += 1
+    return jsonify({"success": True, "saved": saved})
 
 @app.route("/admin/directory")
 def admin_directory():
