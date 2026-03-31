@@ -3,7 +3,7 @@ from flask import Response, jsonify, request
 from app import app, db
 from hardware import attendance_success, attendance_duplicate, attendance_unknown, system_message, cleanup
 from model import load_model_if_exists, predict_with_model, crop_face_and_embed
-
+from sqlalchemy import text
 DATASET_DIR = "dataset"
 latest_frame = None
 system_state = "IDLE" # IDLE, ALIGNING, SCANNING
