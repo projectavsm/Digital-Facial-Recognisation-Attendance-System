@@ -1,15 +1,6 @@
 # hardware.py
 """
-Pi-Safe Hardware Abstraction Layer
-
-Laptop:
-    - Prints LCD + buzzer output to terminal
-
-Raspberry Pi:
-    - Uses 16x2 I2C LCD
-    - Uses GPIO buzzer
-
-This file MUST NEVER crash the system.
+Pi-Safe Hardware Abstraction Layer with Self-Healing I2C Logic
 """
 
 import os
@@ -21,97 +12,104 @@ import platform
 # =========================================================
 
 def is_raspberry_pi() -> bool:
-    """
-    Robust Raspberry Pi detection
-    """
     try:
         if platform.system() != "Linux":
             return False
-
         model_path = "/proc/device-tree/model"
         if os.path.exists(model_path):
             with open(model_path, "r") as f:
                 return "raspberry pi" in f.read().lower()
-
         return False
     except Exception:
         return False
 
-
 IS_PI = is_raspberry_pi()
 
 # =========================================================
-# HARDWARE INITIALIZATION (PI ONLY)
+# HARDWARE INITIALIZATION & RECOVERY
 # =========================================================
 
 lcd = None
 GPIO = None
 BUZZER_PIN = 18
 
-if IS_PI:
+def init_lcd():
+    """
+    Attempts to initialize or reset the I2C LCD
+    """
+    if not IS_PI:
+        return None
     try:
-        import RPi.GPIO as GPIO
         from RPLCD.i2c import CharLCD
-
-        # ---- LCD CONFIG ----
-        lcd = CharLCD(
+        new_lcd = CharLCD(
             i2c_expander="PCF8574",
-            address=0x27,   # common I2C address
+            address=0x27,
             port=1,
             cols=16,
             rows=2,
             dotsize=8
         )
+        new_lcd.clear()
+        return new_lcd
+    except Exception as e:
+        print(f"[HARDWARE ERROR] LCD Init Failed: {e}")
+        return None
 
-        # ---- BUZZER CONFIG ----
+if IS_PI:
+    try:
+        import RPi.GPIO as GPIO
+        # Initial LCD setup
+        lcd = init_lcd()
+        
+        # Buzzer setup
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(BUZZER_PIN, GPIO.OUT)
         GPIO.output(BUZZER_PIN, GPIO.LOW)
-
-        print("[HARDWARE] Raspberry Pi hardware initialized")
-
+        print("[HARDWARE] Raspberry Pi hardware initialized with Self-Healing LCD")
     except Exception as e:
-        print("[HARDWARE ERROR] Pi hardware failed, fallback to terminal mode")
-        print("Reason:", e)
+        print(f"[HARDWARE ERROR] Initial setup failed: {e}")
         IS_PI = False
-        lcd = None
-        GPIO = None
-
-else:
-    print("[HARDWARE] Running in Laptop / Terminal mode")
 
 # =========================================================
-# LOW-LEVEL OUTPUT FUNCTIONS
+# SMART OUTPUT FUNCTIONS (SELF-HEALING)
 # =========================================================
 
 def lcd_display(line1: str = "", line2: str = ""):
     """
-    Display text on LCD or terminal
+    Display text with automatic I2C recovery if garbage/errors occur
     """
-    line1 = (line1 or "")[:16]
-    line2 = (line2 or "")[:16]
+    global lcd
+    l1 = (line1 or "")[:16]
+    l2 = (line2 or "")[:16]
 
-    if IS_PI and lcd:
+    if IS_PI:
         try:
-            lcd.clear()
-            lcd.write_string(line1)
-            if line2:
+            if not lcd:
+                lcd = init_lcd()
+            
+            if lcd:
+                lcd.clear()
+                lcd.write_string(l1)
                 lcd.cursor_pos = (1, 0)
-                lcd.write_string(line2)
+                lcd.write_string(l2)
         except Exception as e:
-            print("[LCD ERROR]", e)
+            print(f"[LCD I2C ERROR] {e}. Attempting hardware reset...")
+            time.sleep(0.1) # Brief pause for bus stabilization
+            lcd = init_lcd() # Recovery attempt
+            if lcd:
+                try:
+                    lcd.write_string(l1)
+                except:
+                    pass
     else:
-        if line2:
-            print(f"[LCD] {line1} | {line2}")
-        else:
-            print(f"[LCD] {line1}")
+        # Laptop/Terminal Fallback
+        output = f"[LCD] {l1}"
+        if l2: output += f" | {l2}"
+        print(output)
 
 
 def buzzer_beep(times: int = 1, duration: float = 0.2):
-    """
-    Beep buzzer or print to terminal
-    """
     if IS_PI and GPIO:
         try:
             for _ in range(times):
@@ -125,55 +123,33 @@ def buzzer_beep(times: int = 1, duration: float = 0.2):
         print("[BUZZER]", "Beep " * times)
 
 # =========================================================
-# HIGH-LEVEL PUBLIC API (USED BY SYSTEM)
+# HIGH-LEVEL PUBLIC API
 # =========================================================
 
 def attendance_success(name: str, confidence: float | None = None):
-    """
-    Attendance marked successfully
-    """
     lcd_display(name, "Attendance OK")
     buzzer_beep(1)
-
-    if confidence is not None:
-        print(f"[SUCCESS] {name} ({confidence:.2f})")
-    else:
-        print(f"[SUCCESS] {name}")
-
+    conf_str = f" ({confidence:.2f})" if confidence is not None else ""
+    print(f"[SUCCESS] {name}{conf_str}")
 
 def attendance_duplicate(name: str):
-    """
-    Attendance already marked today
-    """
     lcd_display(name, "Already Marked")
     buzzer_beep(2)
     print(f"[DUPLICATE] {name} already marked today")
 
-
 def attendance_unknown():
-    """
-    Face not recognized
-    """
-    lcd_display("Unknown Face", "")
+    lcd_display("Unknown Face", "Try Again")
     buzzer_beep(3)
     print("[UNKNOWN] Face not recognized")
 
-
 def system_message(line1: str, line2: str = ""):
-    """
-    Generic system status message
-    """
     lcd_display(line1, line2)
 
-
 # =========================================================
-# CLEANUP (IMPORTANT FOR SYSTEMD)
+# CLEANUP
 # =========================================================
 
 def cleanup():
-    """
-    Cleanup GPIO & LCD safely
-    """
     if IS_PI:
         try:
             if lcd:
@@ -181,5 +157,5 @@ def cleanup():
             if GPIO:
                 GPIO.cleanup()
             print("[HARDWARE] Clean shutdown completed")
-        except Exception:
+        except:
             pass
