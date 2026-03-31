@@ -1,183 +1,180 @@
-#model.py 
+# model.py 
 import os
 import cv2
 import numpy as np
 import pickle
-from sklearn.ensemble import RandomForestClassifier
+import json
 import mlflow
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
-# -------------------------------
-# Paths and constants
-# -------------------------------
-MODEL_PATH = "model.pkl"  # file where trained RandomForest model is saved
+# --- FILE PATHS & CONSTANTS ---
+# Using absolute paths where possible to ensure background threads find the files
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+TRAIN_STATUS_FILE = os.path.join(APP_DIR, "train_status.json")
+MODEL_PATH = os.path.join(APP_DIR, "model.pkl")
 
 # -------------------------------
-# Utility: Crop face and extract embedding
+# Helper: Status Sync
+# -------------------------------
+def write_final_status(data):
+    """
+    Updates the JSON file to signal the frontend that training 
+    is no longer running.
+    """
+    with open(TRAIN_STATUS_FILE, "w") as f:
+        json.dump(data, f)
+
+# -------------------------------
+# Utility: Image Processing
 # -------------------------------
 def crop_face_and_embed(bgr_image, detection):
     """
-    Crops the face from a BGR image and converts it to a small grayscale vector (embedding)
+    Crops the face from a BGR image using MediaPipe detections 
+    and converts it to a 32x32 grayscale normalized vector.
     """
     h, w = bgr_image.shape[:2]
 
-    # Get bounding box relative coordinates from Mediapipe detection
+    # Extract bounding box relative coordinates
     bbox = detection.location_data.relative_bounding_box
     x1 = int(max(0, bbox.xmin * w))
     y1 = int(max(0, bbox.ymin * h))
     x2 = int(min(w, (bbox.xmin + bbox.width) * w))
     y2 = int(min(h, (bbox.ymin + bbox.height) * h))
 
-    # Check for invalid bbox
     if x2 <= x1 or y2 <= y1:
         return None
 
-    # Crop face region
+    # Crop, grayscale, and resize
     face = bgr_image[y1:y2, x1:x2]
-
-    # Convert to grayscale and resize to fixed size
     face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-    face = cv2.resize(face, (32,32), interpolation=cv2.INTER_AREA)
+    face = cv2.resize(face, (32, 32), interpolation=cv2.INTER_AREA)
 
-    # Flatten to vector and normalize
-    emb = face.flatten().astype(np.float32) / 255.0
-    return emb
+    # Flatten and normalize (0.0 to 1.0)
+    return face.flatten().astype(np.float32) / 255.0
 
-# -------------------------------
-# Extract embedding from uploaded image stream
-# -------------------------------
 def extract_embedding_for_image(stream_or_bytes):
     """
-    Accepts a file-like object (Flask file stream) and returns a face embedding vector
+    Takes a Flask file stream, detects the face, and returns the embedding.
+    Used during enrollment and single-image testing.
     """
     import mediapipe as mp
     mp_face = mp.solutions.face_detection.FaceDetection(
         model_selection=1, min_detection_confidence=0.5
     )
 
-    # Read image from stream into BGR numpy array
+    # Decode image from stream
     data = stream_or_bytes.read()
     arr = np.frombuffer(data, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    
     if img is None:
         return None
 
-    # Detect face
+    # Process face detection
     results = mp_face.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     if not results.detections:
         return None
 
-    # Extract embedding
-    emb = crop_face_and_embed(img, results.detections[0])
-    return emb
+    return crop_face_and_embed(img, results.detections[0])
 
 # -------------------------------
-# Load existing model from disk
+# Model Loading & Prediction
 # -------------------------------
 def load_model_if_exists():
-    """
-    Loads the trained RandomForest model if it exists
-    """
+    """Returns the loaded pickle model or None if not trained yet."""
     if not os.path.exists(MODEL_PATH):
         return None
     with open(MODEL_PATH, "rb") as f:
         return pickle.load(f)
 
-# -------------------------------
-# Predict student using model
-# -------------------------------
 def predict_with_model(clf, emb):
-    """
-    Returns predicted user_id (string) and confidence
-    """
+    """Predicts user_id and confidence score from an embedding."""
     proba = clf.predict_proba([emb])[0]
     idx = np.argmax(proba)
-    label = clf.classes_[idx]  # now label is string user_id
-    conf = float(proba[idx])
-    return label, conf
+    return clf.classes_[idx], float(proba[idx])
 
 # -------------------------------
-# Background training function
+# Main Training Logic
 # -------------------------------
 def train_model_background(dataset_dir, progress_callback=None):
     """
-    Trains a RandomForest classifier on all student images in dataset_dir
-    Each student folder must be named after user_id (string from MySQL)
-    Progress callback optional: progress_callback(percent, message)
+    Background task to scan dataset, extract embeddings, 
+    train RandomForest, and update the global status file.
     """
     import mediapipe as mp
     mp_face = mp.solutions.face_detection.FaceDetection(
         model_selection=0, min_detection_confidence=0.3
     )
 
-    X = []  # embeddings
-    y = []  # labels (user_id strings)
+    X, y = [], []
 
-    # List all student folders (folder names = user_id)
+    # Get student folders (each folder name is a user_id)
     student_dirs = [d for d in os.listdir(dataset_dir) if os.path.isdir(os.path.join(dataset_dir, d))]
     total_students = max(1, len(student_dirs))
     processed = 0
 
-    # Iterate over each student
     for user_id in student_dirs:
         folder = os.path.join(dataset_dir, user_id)
         files = [f for f in os.listdir(folder) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
 
-        # Process each image
         for fn in files:
-            path = os.path.join(folder, fn)
-            img = cv2.imread(path)
-            if img is None:
-                continue
+            img = cv2.imread(os.path.join(folder, fn))
+            if img is None: continue
 
             results = mp_face.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-            if not results.detections:
-                continue
+            if not results.detections: continue
 
+            # Extract feature vector
             emb = crop_face_and_embed(img, results.detections[0])
-            if emb is None:
-                continue
-
-            # Add to training data
-            X.append(emb)
-            y.append(user_id)  # now storing string user_id instead of int
+            if emb is not None:
+                X.append(emb)
+                y.append(user_id)
 
         processed += 1
         if progress_callback:
-            pct = int((processed / total_students) * 80)  # up to 80% for feature extraction
-            progress_callback(pct, f"Processed {processed}/{total_students} students")
+            # Scale 0-80% for image processing phase
+            pct = int((processed / total_students) * 80)
+            progress_callback(pct, f"Processing Student {processed}/{total_students}...")
 
-    # Check if we have any training data
+    # Guard clause: No data
     if len(X) == 0:
-        if progress_callback:
-            progress_callback(0, "No training data found")
+        if progress_callback: progress_callback(0, "Error: No face data found")
+        write_final_status({"running": False, "progress": 0, "message": "Failed: No Images"})
         return
 
-    # Convert to numpy arrays
+    # Convert to arrays for Scikit-Learn
     X = np.stack(X)
     y = np.array(y)
 
-    # Train RandomForest
     if progress_callback:
-        progress_callback(85, "Training RandomForest classifier...")
+        progress_callback(85, "Training AI Model...")
+
+    # Initialize and train classifier
     clf = RandomForestClassifier(n_estimators=150, n_jobs=-1, random_state=42)
     clf.fit(X, y)
 
-    # --- NEW: MLFLOW METRICS LOGGING ---
-    # We check how many of the training images the model can correctly identify
+    # Calculate metrics
     predictions = clf.predict(X)
     train_acc = accuracy_score(y, predictions)
-    
-    # Check if an MLflow run is active (started by manual_fix.py)
+
+    # Log to MLflow if an experiment is active
     if mlflow.active_run():
         mlflow.log_metric("train_accuracy", float(train_acc))
         mlflow.log_param("n_estimators", 150)
-        print(f"\n📊 MLflow Metric: Training Accuracy = {train_acc:.2%}")
-    # -----------------------------------
+        print(f"MLflow Logged: Accuracy {train_acc:.2%}")
 
-    # Save model
+    # Save trained model to disk
     with open(MODEL_PATH, "wb") as f:
         pickle.dump(clf, f)
 
+    # --- CRITICAL: Update Status to Idle ---
     if progress_callback:
-        progress_callback(100, "Training complete")
+        progress_callback(100, "Finalizing...")
+    
+    write_final_status({
+        "running": False,
+        "progress": 100,
+        "message": f"Complete! Accuracy: {train_acc:.2%}"
+    })
+    print("✅ Training Finished: Model saved and status file updated.")
