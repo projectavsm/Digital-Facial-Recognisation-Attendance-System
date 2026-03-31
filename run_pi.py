@@ -39,49 +39,85 @@ def trigger_attendance_alias():
 
 def camera_loop():
     global latest_frame, system_state
-    mp_face = mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.4)
+    # Initialize Mediapipe
+    mp_face = mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
     clf = load_model_if_exists()
+    
+    # 1. Clear the LCD and show system is ready
     system_message("System Online", "Ready")
+    time.sleep(0.5) # Give the I2C bus a break
 
     while True:
         frame = get_pi_frame()
-        if frame is None: continue
+        if frame is None: 
+            continue
         latest_frame = frame.copy()
 
         if system_state == "SCANNING":
-            # Check if this is an ENROLLMENT capture (look for a student_id from a global variable)
             current_enrollment_id = getattr(app, 'enroll_id', None)
             
+            # --- ENROLLMENT MODE ---
             if current_enrollment_id:
-                # SAVE MODE: Save the photo to the dataset folder
-                img_path = os.path.join(DATASET_DIR, current_enrollment_id, f"{int(time.time())}.jpg")
+                folder_path = os.path.join(DATASET_DIR, str(current_enrollment_id))
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path)
+                
+                img_path = os.path.join(folder_path, f"{int(time.time())}.jpg")
                 cv2.imwrite(img_path, frame)
-                system_message("Photo Captured", "Saved!")
-                app.enroll_id = None # Reset
+                
+                system_message("Photo Captured", f"ID: {current_enrollment_id}")
+                app.enroll_id = None 
+                time.sleep(1.0) # Settle time
+
+            # --- ATTENDANCE MODE ---
             else:
-                # ATTENDANCE MODE: Recognition logic (your existing code)
-                if system_state == "SCANNING":
-                    # Only do recognition if we are actually in scanning mode
-                    results = mp_face.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                    if results.detections and clf:
-                        emb = crop_face_and_embed(frame, results.detections[0])
-                        if emb is not None:
-                            sid, conf = predict_with_model(clf, emb)
-                            if conf > 0.5:
-                                with app.app_context():
-                                    name = db.session.execute(text("SELECT name FROM users WHERE user_id=:s"),{"s":sid}).scalar()
-                                    exists = db.session.execute(text("SELECT 1 FROM attendance WHERE student_id=:s AND DATE(timestamp)=CURDATE()"),{"s":sid}).fetchone()
-                                    if not exists:
-                                        db.session.execute(text("INSERT INTO attendance (student_id,class_id,timestamp,status) VALUES (:s,1,NOW(),'present')"),{"s":sid})
-                                        db.session.commit()
-                                        attendance_success(name, conf)
-                                    else: attendance_duplicate(name)
-                            else: attendance_unknown()
-                    else: attendance_unknown()
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = mp_face.process(rgb_frame)
+                
+                if results.detections and clf:
+                    emb = crop_face_and_embed(frame, results.detections[0])
+                    if emb is not None:
+                        sid, conf = predict_with_model(clf, emb)
+                        
+                        # CHANGE: Increased threshold from 0.5 to 0.75
+                        if conf > 0.75:
+                            with app.app_context():
+                                # Get student name
+                                name = db.session.execute(
+                                    text("SELECT name FROM users WHERE user_id=:s"),
+                                    {"s": sid}
+                                ).scalar() or f"User {sid}"
+                                
+                                # Check duplicate
+                                exists = db.session.execute(
+                                    text("SELECT 1 FROM attendance WHERE student_id=:s AND DATE(timestamp)=CURDATE()"),
+                                    {"s": sid}
+                                ).fetchone()
+                                
+                                if not exists:
+                                    db.session.execute(
+                                        text("INSERT INTO attendance (student_id,class_id,timestamp,status) VALUES (:s,1,NOW(),'present')"),
+                                        {"s": sid}
+                                    )
+                                    db.session.commit()
+                                    attendance_success(name, conf)
+                                else:
+                                    attendance_duplicate(name)
+                        else:
+                            # This was likely the 0.55 confidence "Abhisam" hallucination
+                            print(f"[REJECTED] Low confidence: {conf:.2f}")
+                            attendance_unknown()
+                    else:
+                        attendance_unknown()
                 else:
-                    # Just show the video feed, don't trigger buzzers
-                    pass
+                    attendance_unknown()
+
+            # Always return to IDLE after one action
             system_state = "IDLE"
+            time.sleep(0.2) # Essential: prevent I2C bus flooding
+        
+        # CPU Relief: Don't loop as fast as humanly possible
+        time.sleep(0.01)
 
 if __name__ == "__main__":
     threading.Thread(target=camera_loop, daemon=True).start()
