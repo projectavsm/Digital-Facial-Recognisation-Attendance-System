@@ -39,84 +39,100 @@ def trigger_attendance_alias():
 
 def camera_loop():
     global latest_frame, system_state
-    # Initialize Mediapipe
     mp_face = mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
     clf = load_model_if_exists()
     
-    # 1. Clear the LCD and show system is ready
+    # --- MAJORITY VOTE VARIABLES ---
+    consecutive_matches = 0
+    last_sid = None
+    REQUIRED_FRAMES = 3 
+    # -------------------------------
+
     system_message("System Online", "Ready")
-    time.sleep(0.5) # Give the I2C bus a break
+    time.sleep(0.5)
 
     while True:
         frame = get_pi_frame()
-        if frame is None: 
-            continue
+        if frame is None: continue
         latest_frame = frame.copy()
 
         if system_state == "SCANNING":
             current_enrollment_id = getattr(app, 'enroll_id', None)
             
-            # --- ENROLLMENT MODE ---
             if current_enrollment_id:
+                # --- ENROLLMENT MODE --- (Keep as is)
                 folder_path = os.path.join(DATASET_DIR, str(current_enrollment_id))
-                if not os.path.exists(folder_path):
-                    os.makedirs(folder_path)
-                
+                if not os.path.exists(folder_path): os.makedirs(folder_path)
                 img_path = os.path.join(folder_path, f"{int(time.time())}.jpg")
                 cv2.imwrite(img_path, frame)
-                
                 system_message("Photo Captured", f"ID: {current_enrollment_id}")
                 app.enroll_id = None 
-                time.sleep(1.0) # Settle time
+                system_state = "IDLE"
+                time.sleep(1.0) 
 
-            # --- ATTENDANCE MODE ---
             else:
+                # --- ATTENDANCE MODE (Merged Logic) ---
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = mp_face.process(rgb_frame)
                 
+                found_match_this_frame = False
+
                 if results.detections and clf:
                     emb = crop_face_and_embed(frame, results.detections[0])
                     if emb is not None:
                         sid, conf = predict_with_model(clf, emb)
                         
-                        # CHANGE: Increased threshold from 0.5 to 0.75
-                        if conf > 0.75:
-                            with app.app_context():
-                                # Get student name
-                                name = db.session.execute(
-                                    text("SELECT name FROM users WHERE user_id=:s"),
-                                    {"s": sid}
-                                ).scalar() or f"User {sid}"
-                                
-                                # Check duplicate
-                                exists = db.session.execute(
-                                    text("SELECT 1 FROM attendance WHERE student_id=:s AND DATE(timestamp)=CURDATE()"),
-                                    {"s": sid}
-                                ).fetchone()
-                                
-                                if not exists:
-                                    db.session.execute(
-                                        text("INSERT INTO attendance (student_id,class_id,timestamp,status) VALUES (:s,1,NOW(),'present')"),
-                                        {"s": sid}
-                                    )
-                                    db.session.commit()
-                                    attendance_success(name, conf)
-                                else:
-                                    attendance_duplicate(name)
-                        else:
-                            # This was likely the 0.55 confidence "Abhisam" hallucination
-                            print(f"[REJECTED] Low confidence: {conf:.2f}")
-                            attendance_unknown()
-                    else:
-                        attendance_unknown()
-                else:
-                    attendance_unknown()
+                        # --- 1. DEBUG: Get name immediately for logging ---
+                        with app.app_context():
+                            predicted_name = db.session.execute(
+                                text("SELECT name FROM users WHERE user_id=:s"),
+                                {"s": sid}
+                            ).scalar() or f"User {sid}"
 
-            # Always return to IDLE after one action
-            system_state = "IDLE"
-            time.sleep(0.2) # Essential: prevent I2C bus flooding
+                        # --- 2. THRESHOLD CHECK ---
+                        if conf > 0.75:
+                            found_match_this_frame = True
+                            if sid == last_sid:
+                                consecutive_matches += 1
+                                print(f"[STREAK] {consecutive_matches}/3 for {predicted_name}")
+                            else:
+                                consecutive_matches = 1
+                                last_sid = sid
+                                
+                            # --- 3. MAJORITY VOTE CHECK ---
+                            if consecutive_matches >= REQUIRED_FRAMES:
+                                with app.app_context():
+                                    exists = db.session.execute(
+                                        text("SELECT 1 FROM attendance WHERE student_id=:s AND DATE(timestamp)=CURDATE()"),
+                                        {"s": sid}
+                                    ).fetchone()
+                                    
+                                    if not exists:
+                                        db.session.execute(
+                                            text("INSERT INTO attendance (student_id,class_id,timestamp,status) VALUES (:s,1,NOW(),'present')"),
+                                            {"s": sid}
+                                        )
+                                        db.session.commit()
+                                        attendance_success(predicted_name, conf)
+                                    else:
+                                        attendance_duplicate(predicted_name)
+                                
+                                # Reset and go IDLE only after full success
+                                consecutive_matches = 0
+                                last_sid = None
+                                system_state = "IDLE"
+                        else:
+                            # LOG: Even if rejected, we show what the AI thought
+                            print(f"[REJECTED] Tentative: {predicted_name} ({conf:.2f}) - Below 0.75")
+                            # Optional: attendance_unknown() call could go here if you want LCD to flicker "Unknown"
+
+                # If no face or low confidence, reset the streak
+                if not found_match_this_frame:
+                    consecutive_matches = 0
+                    last_sid = None
+
+            time.sleep(0.1) 
         
-        # CPU Relief: Don't loop as fast as humanly possible
         time.sleep(0.01)
 
 if __name__ == "__main__":
