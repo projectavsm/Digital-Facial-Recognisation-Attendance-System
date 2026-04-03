@@ -155,25 +155,28 @@ def admin_directory():
 
 @app.route('/download_csv')
 def download_csv():
-    # Fetch all records with joined names for a clean report
+    # Fetching all relevant fields based on your DESCRIBE output
     query = text("""
-        SELECT a.id, u.name, a.student_id, a.timestamp, a.status 
+        SELECT a.attendance_id, u.name, a.student_id, a.timestamp, a.status 
         FROM attendance a
         JOIN users u ON a.student_id = u.user_id
         ORDER BY a.timestamp DESC
     """)
-    records = db.session.execute(query).fetchall()
+    
+    try:
+        records = db.session.execute(query).fetchall()
 
-    # Generate CSV in memory
-    si = StringIO()
-    cw = csv.writer(si)
-    cw.writerow(['Record ID', 'Student Name', 'Student ID', 'Timestamp', 'Status']) # Headers
-    cw.writerows(records)
+        si = StringIO()
+        cw = csv.writer(si)
+        cw.writerow(['Log ID', 'Student Name', 'Student ID', 'Timestamp', 'Status'])
+        cw.writerows(records)
 
-    output = make_response(si.getvalue())
-    output.headers["Content-Disposition"] = "attachment; filename=attendance_report.csv"
-    output.headers["Content-type"] = "text/csv"
-    return output
+        output = make_response(si.getvalue())
+        output.headers["Content-Disposition"] = "attachment; filename=attendance_report.csv"
+        output.headers["Content-type"] = "text/csv"
+        return output
+    except Exception as e:
+        return f"Download Error: {str(e)}", 500
 
 @app.route("/admin/view_student/<student_id>")
 def admin_view_student(student_id):
@@ -236,9 +239,9 @@ def mark_attendance():
 def attendance_record():
     period = request.args.get('period', 'all')
     
-    # Base query - ensure the order matches: ID, StudentID, Name, Timestamp
+    # We use attendance_id as the first column to match your HTML's {{ r[0] }}
     sql = """
-        SELECT a.id, a.student_id, u.name, a.timestamp 
+        SELECT a.attendance_id, a.student_id, u.name, a.timestamp 
         FROM attendance a 
         JOIN users u ON a.student_id = u.user_id 
     """
@@ -252,8 +255,11 @@ def attendance_record():
         
     sql += " ORDER BY a.timestamp DESC"
     
-    records = db.session.execute(text(sql)).fetchall()
-    return render_template('attendence_record.html', records=records)
+    try:
+        records = db.session.execute(text(sql)).fetchall()
+        return render_template('attendence_record.html', records=records)
+    except Exception as e:
+        return f"Database Error: {str(e)}", 500
 
 # --- MAIN EXECUTION ---
 
