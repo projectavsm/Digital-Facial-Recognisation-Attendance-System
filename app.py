@@ -231,16 +231,6 @@ def mark_attendance():
     """Renders the camera interface for face recognition."""
     return render_template("mark_attendance.html")
 
-@app.route("/attendance_record")
-def attendance_record():
-    """Displays the history of attendance logs."""
-    records = db.session.execute(text("""
-        SELECT a.timestamp, u.name, u.class, u.section 
-        FROM attendance a 
-        JOIN users u ON a.student_id = u.user_id 
-        ORDER BY a.timestamp DESC LIMIT 50
-    """)).fetchall()
-    return render_template("attendance_record.html", records=records)
 
 @app.route('/attendance_record')
 def attendance_record():
