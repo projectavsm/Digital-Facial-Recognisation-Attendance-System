@@ -96,13 +96,35 @@ def send_boot_report():
 # --- CAMERA & VIDEO LOGIC ---
 
 def get_pi_frame():
-    """Captures frame from Pi Camera using libcamera-vid pipe."""
-    cmd = ["rpicam-vid", "--nopreview", "--camera", "0", "--width", "640", "--height", "480", "--frames", "1", "--timeout", "200", "--codec", "yuv420", "-o", "-"]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    if not proc.stdout: return None
-    raw = proc.stdout[:int(640*480*1.5)]
-    yuv = np.frombuffer(raw, dtype=np.uint8).reshape((int(480*1.5), 640))
-    return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
+    """Captures the absolute LATEST frame by forcing a flush and short timeout."""
+    cmd = [
+        "rpicam-vid", 
+        "--nopreview", 
+        "--camera", "0", 
+        "--width", "640", 
+        "--height", "480", 
+        "--frames", "1", 
+        "--timeout", "1",  # Minimal timeout to prevent lag buildup
+        "--flush",         # Force the camera to clear its internal buffer
+        "--codec", "yuv420", 
+        "-o", "-"
+    ]
+    
+    try:
+        # We add a 2-second subprocess timeout to ensure the script never hangs
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=2)
+        if not proc.stdout: return None
+        
+        expected_size = int(640 * 480 * 1.5)
+        raw = proc.stdout[:expected_size]
+        
+        if len(raw) < expected_size: return None
+        
+        yuv = np.frombuffer(raw, dtype=np.uint8).reshape((int(480 * 1.5), 640))
+        return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
+    except subprocess.TimeoutExpired:
+        print("[CAMERA] Timeout reading frame - skipping...")
+        return None
 
 @app.route('/video_feed')
 def video_feed():
@@ -231,8 +253,13 @@ def camera_loop():
                     consecutive_matches = 0
                     last_sid = None
 
-            time.sleep(0.1) 
+            # --- DYNAMIC SLEEP (Replace your old time.sleep(0.1) and (0.01) here) ---
+            if system_state == "SCANNING":
+                time.sleep(0.01) # Keep the loop tight during active use
+            else:
+                time.sleep(0.2)  # Save CPU while waiting for a trigger
         
+        # This is the very last line of the while True loop
         time.sleep(0.01)
 
 # --- MAIN RUN ---
