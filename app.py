@@ -257,7 +257,7 @@ def attendance_record():
     
     try:
         records = db.session.execute(text(sql)).fetchall()
-        return render_template('attendence_record.html', records=records)
+        return render_template('attendance_record.html', records=records)
     except Exception as e:
         return f"Database Error: {str(e)}", 500
 
