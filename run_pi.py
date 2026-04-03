@@ -129,14 +129,19 @@ def trigger_attendance_alias():
 
 def camera_loop():
     global latest_frame, system_state
+    # Initialize MediaPipe Face Detection
     mp_face = mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
     clf = load_model_if_exists()
     
-    # --- MAJORITY VOTE LOGIC ---
+    # --- MATCH TRACKING VARIABLES ---
     consecutive_matches = 0
     last_sid = None
     REQUIRED_FRAMES = 3 
-
+    
+    # --- LCD FEEDBACK THROTTLING ---
+    last_lcd_update = 0
+    LCD_COOLDOWN = 1.5  # Seconds to keep a name on screen so it's readable
+    
     system_message("System Online", "Ready")
     time.sleep(0.5)
 
@@ -148,19 +153,20 @@ def camera_loop():
         if system_state == "SCANNING":
             current_enrollment_id = getattr(app, 'enroll_id', None)
             
+            # --- 1. ENROLLMENT MODE ---
             if current_enrollment_id:
-                # --- ENROLLMENT MODE ---
                 folder_path = os.path.join(DATASET_DIR, str(current_enrollment_id))
                 if not os.path.exists(folder_path): os.makedirs(folder_path)
                 img_path = os.path.join(folder_path, f"{int(time.time())}.jpg")
                 cv2.imwrite(img_path, frame)
+                
                 system_message("Photo Captured", f"ID: {current_enrollment_id}")
                 app.enroll_id = None 
                 system_state = "IDLE"
                 time.sleep(1.0) 
 
+            # --- 2. ATTENDANCE MODE ---
             else:
-                # --- ATTENDANCE MODE ---
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = mp_face.process(rgb_frame)
                 found_match_this_frame = False
@@ -170,12 +176,13 @@ def camera_loop():
                     if emb is not None:
                         sid, conf = predict_with_model(clf, emb)
                         
+                        # Fetch user name from DB
                         with app.app_context():
                             name = db.session.execute(
                                 text("SELECT name FROM users WHERE user_id=:s"), {"s": sid}
                             ).scalar() or f"User {sid}"
 
-                        # 1. Confident Threshold
+                        # A. SUCCESS PATH (High Confidence + Streak)
                         if conf > 0.75:
                             found_match_this_frame = True
                             if sid == last_sid:
@@ -185,9 +192,9 @@ def camera_loop():
                                 consecutive_matches = 1
                                 last_sid = sid
                                 
-                            # 2. Match Consensus
                             if consecutive_matches >= REQUIRED_FRAMES:
                                 with app.app_context():
+                                    # Check if already marked today
                                     exists = db.session.execute(
                                         text("SELECT 1 FROM attendance WHERE student_id=:s AND DATE(timestamp)=CURDATE()"),
                                         {"s": sid}
@@ -199,17 +206,27 @@ def camera_loop():
                                             {"s": sid}
                                         )
                                         db.session.commit()
-                                        attendance_success(name, conf)
+                                        attendance_success(name, conf) # LCD Success Message
                                     else:
-                                        attendance_duplicate(name)
+                                        attendance_duplicate(name) # LCD Duplicate Message
                                 
+                                # Reset for next person
                                 consecutive_matches = 0
                                 last_sid = None
                                 system_state = "IDLE"
-                        else:
-                            # 3. Transparent Logging
+                                last_lcd_update = time.time() # Prevent immediate overwrite
+
+                        # B. FEEDBACK PATH (Near-misses shown on LCD)
+                        elif conf > 0.40 and (time.time() - last_lcd_update > LCD_COOLDOWN):
+                            # Adjusts to 16x2 display. Example: "Scanning... \n Nitesh 73%"
+                            system_message("Scanning...", f"{name[:10]} {int(conf*100)}%")
+                            last_lcd_update = time.time()
+
+                        # C. LOGGING (Always log rejections to console for debugging)
+                        if conf <= 0.75:
                             print(f"[REJECTED] Low Conf: {name} ({conf:.2f})")
 
+                # If face is lost or no detection, reset the streak
                 if not found_match_this_frame:
                     consecutive_matches = 0
                     last_sid = None
