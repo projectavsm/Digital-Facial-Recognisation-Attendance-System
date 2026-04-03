@@ -5,7 +5,9 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from dotenv import load_dotenv
 import pandas as pd
-
+import csv
+from io import StringIO
+from flask import make_response
 # AI Model Logic (imported from your model.py)
 from model import train_model_background, extract_embedding_for_image, load_model_if_exists
 
@@ -151,6 +153,28 @@ def admin_directory():
     students = db.session.execute(text("SELECT user_id, name, class, section FROM users WHERE role = 'student'")).fetchall()
     return render_template("admin_directory.html", students=students)
 
+@app.route('/download_csv')
+def download_csv():
+    # Fetch all records with joined names for a clean report
+    query = text("""
+        SELECT a.id, u.name, a.student_id, a.timestamp, a.status 
+        FROM attendance a
+        JOIN users u ON a.student_id = u.user_id
+        ORDER BY a.timestamp DESC
+    """)
+    records = db.session.execute(query).fetchall()
+
+    # Generate CSV in memory
+    si = StringIO()
+    cw = csv.writer(si)
+    cw.writerow(['Record ID', 'Student Name', 'Student ID', 'Timestamp', 'Status']) # Headers
+    cw.writerows(records)
+
+    output = make_response(si.getvalue())
+    output.headers["Content-Disposition"] = "attachment; filename=attendance_report.csv"
+    output.headers["Content-type"] = "text/csv"
+    return output
+
 @app.route("/admin/view_student/<student_id>")
 def admin_view_student(student_id):
     """Allows admin to see the captured face images for a specific student."""
@@ -217,6 +241,29 @@ def attendance_record():
         ORDER BY a.timestamp DESC LIMIT 50
     """)).fetchall()
     return render_template("attendance_record.html", records=records)
+
+@app.route('/attendance_record')
+def attendance_record():
+    period = request.args.get('period', 'all')
+    
+    # Base query - ensure the order matches: ID, StudentID, Name, Timestamp
+    sql = """
+        SELECT a.id, a.student_id, u.name, a.timestamp 
+        FROM attendance a 
+        JOIN users u ON a.student_id = u.user_id 
+    """
+    
+    if period == 'daily':
+        sql += " WHERE DATE(a.timestamp) = CURDATE()"
+    elif period == 'weekly':
+        sql += " WHERE a.timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+    elif period == 'monthly':
+        sql += " WHERE a.timestamp >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
+        
+    sql += " ORDER BY a.timestamp DESC"
+    
+    records = db.session.execute(text(sql)).fetchall()
+    return render_template('attendence_record.html', records=records)
 
 # --- MAIN EXECUTION ---
 
