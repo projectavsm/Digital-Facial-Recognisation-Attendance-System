@@ -208,7 +208,7 @@ def camera_loop():
                             name = result[0] if result else "New Student"
 
                         # A. SUCCESS PATH (High Confidence + Streak)
-                        if conf > 0.75:
+                        if conf > 0.35:
                             found_match_this_frame = True
                             if sid == last_sid:
                                 consecutive_matches += 1
