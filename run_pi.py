@@ -1,4 +1,5 @@
 import threading, time, subprocess, os, cv2, numpy as np, mediapipe as mp
+from unittest import result
 import socket, smtplib
 from email.message import EmailMessage
 from flask import Response, jsonify, request
@@ -200,9 +201,11 @@ def camera_loop():
                         
                         # Fetch user name from DB
                         with app.app_context():
-                            name = db.session.execute(
+                            result = db.session.execute(
                                 text("SELECT name FROM users WHERE user_id=:s"), {"s": sid}
-                            ).scalar() or f"User {sid}"
+                            ).fetchone()
+                            # If found in DB, use name. If not found (newly added), show "New Student"
+                            name = result[0] if result else "New Student"
 
                         # A. SUCCESS PATH (High Confidence + Streak)
                         if conf > 0.75:
