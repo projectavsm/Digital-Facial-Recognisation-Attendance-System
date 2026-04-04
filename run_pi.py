@@ -248,7 +248,7 @@ def camera_loop():
                             last_lcd_update = time.time()
 
                         # C. LOGGING (Always log rejections to console for debugging)
-                        if conf <= 0.75:
+                        if conf <= 0.50:
                             print(f"[REJECTED] Low Conf: {name} ({conf:.2f})")
 
                 # If face is lost or no detection, reset the streak
