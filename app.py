@@ -194,18 +194,36 @@ def admin_view_student(student_id):
 
 @app.route("/admin/delete_student/<student_id>", methods=["POST"])
 def delete_student(student_id):
-    """Deletes a student from the database and removes their image folder."""
+    """Deletes a student and all their associated data."""
     if not session.get('admin_logged_in'):
         return jsonify({"error": "Unauthorized"}), 401
+        
     try:
-        db.session.execute(text("DELETE FROM users WHERE user_id = :sid"), {"sid": student_id})
+        # 1. Delete associated attendance records first (Fixes the 500 error)
+        db.session.execute(
+            text("DELETE FROM attendance WHERE student_id = :sid"), 
+            {"sid": student_id}
+        )
+        
+        # 2. Delete the student from the users table
+        db.session.execute(
+            text("DELETE FROM users WHERE user_id = :sid"), 
+            {"sid": student_id}
+        )
+        
+        # Commit the database changes
         db.session.commit()
+
+        # 3. Remove their image folder
         folder_path = os.path.join(DATASET_DIR, student_id)
         if os.path.exists(folder_path):
             shutil.rmtree(folder_path)
+            
         return redirect(url_for('admin_directory'))
+        
     except Exception as e:
-        return f"Error: {str(e)}", 500
+        db.session.rollback() # Important to undo changes if something fails
+        return f"Database Error: {str(e)}", 500
 
 @app.route("/admin/train_trigger", methods=["POST"])
 def admin_train_trigger():
