@@ -159,7 +159,7 @@ def camera_loop():
     # --- MATCH TRACKING VARIABLES ---
     consecutive_matches = 0
     last_sid = None
-    REQUIRED_FRAMES = 3 
+    REQUIRED_FRAMES = 2
     
     # --- LCD FEEDBACK THROTTLING ---
     last_lcd_update = 0
